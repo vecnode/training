@@ -1,0 +1,30 @@
+# --- Python / uv ---
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# uv.lock IS committed for reproducibility — do not ignore it.
+
+# --- All downloads / caches live under .cache/ (HF_HOME, UV_CACHE_DIR) ---
+# so cleanup is just `rm -rf .cache/` — nothing else on disk gets touched.
+.cache/
+
+# --- Raw datasets: never committed, scripts fetch/generate them locally ---
+DATASET/*
+!DATASET/README.md
+
+DATASET_JSONL/*
+!DATASET_JSONL/README.md
+
+# --- Training/eval artifacts: adapters, merged models, logs, predictions ---
+output/*
+!output/README.md
+
+# --- Axolotl / training runtime noise ---
+wandb/
+*.safetensors
+*.bin
+*.pt
+*.ckpt
+last_run_prepared/

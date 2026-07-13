@@ -1,0 +1,50 @@
+# Full-precision LoRA fine-tune for a smaller (1-3B class) model.
+# No 4-bit quantization, so it trades "can I fit a bigger model" for
+# "higher-fidelity adapter on a smaller model" — still comfortable on 24GB.
+# Target task: OCR text -> summary text.
+
+base_model: Qwen/Qwen2.5-3B-Instruct
+
+load_in_4bit: false
+load_in_8bit: false
+adapter: lora
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.05
+lora_target_linear: true
+
+datasets:
+  - path: DATASET_JSONL/train.jsonl
+    type: alpaca
+    ds_type: json
+
+test_datasets:
+  - path: DATASET_JSONL/val.jsonl
+    type: alpaca
+    ds_type: json
+    split: train
+
+output_dir: ./output/lora-3090-24gb
+
+sequence_len: 2048
+sample_packing: true
+pad_to_sequence_len: true
+
+micro_batch_size: 4
+gradient_accumulation_steps: 4
+num_epochs: 3
+
+optimizer: adamw_torch
+lr_scheduler: cosine
+learning_rate: 0.0001
+warmup_steps: 10
+
+bf16: auto
+tf32: true
+flash_attention: true
+gradient_checkpointing: true
+
+eval_steps: 50
+save_steps: 100
+logging_steps: 5
+save_total_limit: 3
