@@ -1,0 +1,56 @@
+# Same recipe as qlora-3090-24gb.yml, scaled up once you have more than one
+# card (or bigger cards). Only the model size, batch sizing, and deepspeed
+# stage change — dataset format, adapter type, and scripts stay identical.
+#
+# Run with multiple GPUs via accelerate, e.g.:
+#   uv run accelerate launch -m axolotl.cli.train configs/multi-gpu-scale.yml
+# or set `--num-processes N` / configure ./accelerate_config.yaml as needed.
+
+base_model: Qwen/Qwen2.5-32B-Instruct
+
+load_in_4bit: true
+adapter: qlora
+lora_r: 64
+lora_alpha: 16
+lora_dropout: 0.05
+lora_target_linear: true
+
+datasets:
+  - path: DATASET_JSONL/train.jsonl
+    type: alpaca
+    ds_type: json
+
+test_datasets:
+  - path: DATASET_JSONL/val.jsonl
+    type: alpaca
+    ds_type: json
+    split: train
+
+output_dir: ./output/multi-gpu-scale
+
+sequence_len: 4096
+sample_packing: true
+pad_to_sequence_len: true
+
+micro_batch_size: 1
+gradient_accumulation_steps: 16
+num_epochs: 3
+
+optimizer: adamw_bnb_8bit
+lr_scheduler: cosine
+learning_rate: 0.0001
+warmup_steps: 20
+
+bf16: auto
+tf32: true
+flash_attention: true
+gradient_checkpointing: true
+
+# Fetched by uv_bootstrap into .cache/deepspeed_configs/ — pick zero2 for
+# 2-4 GPUs, zero3 once the base model no longer fits per-GPU even sharded.
+deepspeed: .cache/deepspeed_configs/zero2.json
+
+eval_steps: 50
+save_steps: 100
+logging_steps: 5
+save_total_limit: 3
