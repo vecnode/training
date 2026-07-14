@@ -4,9 +4,7 @@
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 
 Fine-tuning and serving workspace, scaling from a single RTX 3090 (24GB) up to
-multi-GPU. Each pipeline is a self-contained top-level folder — own
-`pyproject.toml`, own `uv`-managed venv, own docs — so they don't collide with
-each other or force a shared dependency set.
+multi-GPU.
 
 ## Pipelines
 
@@ -24,15 +22,6 @@ each other or force a shared dependency set.
 `deploy/` holds one subfolder per pipeline that has a serving story, each with
 its own venv and dependencies — independently deployable, and new pipelines
 add a new `deploy/<pipeline>/` folder rather than touching existing ones.
-
-## Relationship to other repos
-
-Training data for both pipelines above (OCR text + reference summaries) comes
-from the separate [`pre-training`](https://github.com/vecnode/pre-training)
-repo's `outputs/[timestamp]_[dataset]/` folders — this repo does not run OCR
-or generate summaries itself, it only trains on and serves from CSVs produced
-there. See each pipeline's README for the exact commands to point it at that
-data.
 
 ## License
 
