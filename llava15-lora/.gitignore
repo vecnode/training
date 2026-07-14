@@ -1,0 +1,21 @@
+# --- Python / uv ---
+.venv/
+__pycache__/
+*.pyc
+
+# --- Hugging Face cache for the LLaVA base model (~14GB, redownloaded on first run) ---
+hf_cache/
+
+# --- Prepared dataset + training runs (checkpoints, adapters, logs): large
+# binaries that don't belong in git. data/ is rebuildable from the
+# pre-training repo's OCR+SUMMARIES CSVs via build_llava15_dataset.py; runs/
+# holds actual trained results (not cheaply regenerable) - kept locally on
+# disk, just not committed. Back these up separately if they matter. ---
+data/*
+!data/README.md
+
+runs/*
+!runs/README.md
+
+*.pt
+*.safetensors

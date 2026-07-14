@@ -1,0 +1,10 @@
+# --- Python / uv ---
+.venv/
+__pycache__/
+*.pyc
+
+# --- Fused/merged model (~14GB), regenerable via merge_adapter.py ---
+merged_model/
+
+*.safetensors
+*.bin
