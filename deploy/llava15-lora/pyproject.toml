@@ -1,0 +1,31 @@
+[project]
+name = "llava15-lora-deploy"
+version = "0.1.0"
+description = "FastAPI inference server for the llava15-lora adapter"
+requires-python = ">=3.10"
+dependencies = [
+  "accelerate>=0.33.0",
+  "fastapi>=0.115.0",
+  "huggingface-hub>=0.25.0",
+  "peft>=0.12.0",
+  "pillow>=10.0.0",
+  "sentencepiece>=0.2.0",
+  "torch==2.11.0",
+  "torchvision==0.26.0",
+  "transformers>=4.45.0",
+  "uvicorn[standard]>=0.30.0",
+]
+
+[tool.uv]
+package = false
+
+# Pin torch/torchvision to the CUDA 12.8 build. Without this, `uv sync` resolves
+# the CPU-only wheel from PyPI and GPU inference silently stops working.
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
