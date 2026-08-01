@@ -10,6 +10,7 @@ multi-GPU.
 
 | Folder | Task | Framework |
 |---|---|---|
+| [`pre-training/`](pre-training/README.md) | PDF corpus → OCR/summary/layout/QA training data | Surya OCR + Gemma 3 |
 | [`axolotl-ocr-summary/`](axolotl-ocr-summary/README.md) | OCR text → summary text, LoRA/QLoRA | [Axolotl](https://axolotl.ai/) |
 | [`llava15-lora/`](llava15-lora/README.md) | OCR text → summary text, LLaVA 1.5 7B LoRA (text-only) | `transformers` + `peft` |
 

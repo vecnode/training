@@ -1,0 +1,14 @@
+*.png
+*.pdf
+Release_1/
+Release_1_PNG/
+outputs/*
+!outputs/README.md
+conversion_log.txt
+
+*.pt
+.venv/
+__pycache__/
+*.pyc
+*.csv
+*.safetensors
