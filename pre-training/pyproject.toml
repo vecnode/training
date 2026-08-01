@@ -1,0 +1,40 @@
+[project]
+name = "dataset-pretraining-pipeline"
+version = "0.1.0"
+description = "Local OCR preprocessing pipeline"
+requires-python = ">=3.10"
+dependencies = [
+  "accelerate>=0.33.0",
+  "einops>=0.8.2,<0.9.0",
+  "fastapi>=0.115.0",
+  "huggingface-hub>=0.25.0",
+  "numpy>=1.26.0",
+  "peft>=0.12.0",
+  "pillow>=10.0.0,<11.0.0",
+  "scikit-learn>=1.5.0",
+  "sentencepiece>=0.2.0",
+  # Pinned exactly: surya-ocr 0.20+ rewrote the package around a vLLM/Docker-
+  # hosted inference server. 0.17.1 is the last release that runs fully local
+  # in-process (FoundationPredictor/RecognitionPredictor/DetectionPredictor),
+  # which is what this pipeline needs. Do not bump past the 0.1x line without
+  # re-checking whether the vLLM server requirement has been made optional.
+  "surya-ocr==0.17.1",
+  "torch==2.11.0",
+  "torchvision==0.26.0",
+  "transformers>=4.57.1,<5.0.0",
+  "uvicorn[standard]>=0.30.0",
+]
+
+[tool.uv]
+package = false
+
+# Pin torch/torchvision to the CUDA 12.8 build. Without this, `uv sync` resolves
+# the CPU-only wheel from PyPI and GPU inference silently stops working.
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
