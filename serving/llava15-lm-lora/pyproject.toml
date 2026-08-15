@@ -1,7 +1,7 @@
 [project]
-name = "llava15-lora-deploy"
+name = "llava15-lm-lora-deploy"
 version = "0.1.0"
-description = "FastAPI inference server for the llava15-lora adapter"
+description = "FastAPI inference server for the llava15-lm-lora adapter"
 requires-python = ">=3.10"
 dependencies = [
   "accelerate>=0.33.0",

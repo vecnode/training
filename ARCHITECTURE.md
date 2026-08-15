@@ -74,10 +74,24 @@ RTX 3090 (24GB):
 
 | Pipeline | Framework | Base model | Data shape |
 |---|---|---|---|
-| [`fine-tuning/llava15-lora/`](fine-tuning/llava15-lora/README.md) | `transformers` + `peft` (manual `Trainer` loop) | `llava-hf/llava-1.5-7b-hf` — LoRA on `q_proj`/`v_proj` of the language backbone only. Vision tower is not exercised; this is a text-only fine-tune of a multimodal model. | JSONL with `text` / `summary` fields |
+| [`fine-tuning/llava15-lm-lora/`](fine-tuning/llava15-lm-lora/README.md) | `transformers` + `peft` (manual `Trainer` loop) | `llava-hf/llava-1.5-7b-hf` — LoRA on `q_proj`/`v_proj` of the language-model backbone only. Vision tower is not exercised; this is a text-only fine-tune of a multimodal model. | JSONL with `text` / `summary` fields |
 | [`fine-tuning/axolotl-ocr-summary/`](fine-tuning/axolotl-ocr-summary/README.md) | [Axolotl](https://axolotl.ai/) (config-driven) | `Qwen/Qwen2.5-3B-Instruct` (full LoRA) or 7-8B (QLoRA) — no vision component | Alpaca-shape JSONL: `{"instruction", "input", "output"}` |
 
-**`llava15-lora/` is a generic text-summarization LoRA, not OCR-specific** —
+**Naming: `llava15-lm-lora`, not `llava15-lora`.** `llava-hf/llava-1.5-7b-hf`
+is a vision-language model (CLIP vision encoder → multimodal projector →
+Vicuna-7B language backbone). This pipeline touches only the language-model
+backbone — LoRA on `q_proj`/`v_proj` inside its attention layers — and never
+loads an image, the vision encoder, or the projector (the dataset,
+CNN/DailyMail, has no images). Functionally it's a LoRA fine-tune of a plain
+causal LLM that happens to ship inside a LLaVA checkpoint. `-lm-` in the
+folder name marks that distinction; a planned `llava15-full-lora/` sibling,
+trained on image+text pairs and actually exercising the vision
+encoder/projector, would be this repo's first real VLM fine-tune. Renamed
+from `llava15-lora` (and `serving/llava15-lora` → `serving/llava15-lm-lora`)
+this pass — see [`fine-tuning/llava15-lm-lora/README.md`](fine-tuning/llava15-lm-lora/README.md#what-lm-means-here-and-why-its-not-a-vlm-fine-tune)
+for the full explanation.
+
+**`llava15-lm-lora/` is a generic text-summarization LoRA, not OCR-specific** —
 its interface, data source, and default prompt were all cleaned up this pass
 to reflect that:
 
@@ -126,18 +140,38 @@ against the actual files:
 `summary`. `build_llava15_dataset.py --cnn-dailymail-dir ... --max-samples
 2000` was run end-to-end against the real files and produces valid JSONL
 records; full details and commands in
-[`fine-tuning/llava15-lora/README.md`](fine-tuning/llava15-lora/README.md).
+[`fine-tuning/llava15-lm-lora/README.md`](fine-tuning/llava15-lm-lora/README.md).
+
+### First real training run — done and verified good
+
+2,000-sample JSONL (1,800 train / 200 val), 1 epoch, 450 steps, batch=1 ×
+grad-accum=4, ~31 min on a single RTX 3090. Loss dropped 1.66 → ~1.12 in the
+first ~50 steps then plateaued in a ~1.0–1.2 band for the rest of the run;
+`eval_loss` (1.11) tracked train loss closely (no overfitting). That plateau
+is expected for a rank-16, 2-projection adapter on a small dataset with a
+noisy effective batch size of 4 — not evidence of a broken run.
+
+Loss alone doesn't say whether the summaries are actually good, so
+`generate_llava15_lora.py` gained a `--jsonl-eval <path> --num-samples N`
+reconstruction-test mode this pass: it replicates the trainer's train/val
+split (same seed/ratio) and prints genuinely held-out
+source/reference/generated triples with token-F1, instead of requiring a
+manual `--text` string. Run against this adapter, it produced coherent,
+on-topic, correctly-bulleted CNN/DailyMail-style summaries (avg token-F1
+0.357 across 5 samples) — confirms the adapter trained well despite the
+plateaued loss. Full example output in the
+[pipeline README](fine-tuning/llava15-lm-lora/README.md#5-reconstruction-test--verify-quality-not-just-loss).
 
 ## Stage 3 — `serving/`
 
 One `serving/<pipeline>/` folder per fine-tuning pipeline that has a serving
-story. Currently: [`serving/llava15-lora/`](serving/llava15-lora/README.md),
+story. Currently: [`serving/llava15-lm-lora/`](serving/llava15-lm-lora/README.md),
 a FastAPI service (`app.py`) that loads the base LLaVA model + trained
 adapter (or a fused/merged model) once and serves a JSON API plus a
 dataset-browser front-end. Deliberately decoupled from
-`fine-tuning/llava15-lora/` — it only reads the trained adapter directory
-(`../../fine-tuning/llava15-lora/runs/llava15_lora/final_adapter`), never
-imports its training code. `uv run --directory serving/llava15-lora python
+`fine-tuning/llava15-lm-lora/` — it only reads the trained adapter directory
+(`../../fine-tuning/llava15-lm-lora/runs/llava15_lora/final_adapter`), never
+imports its training code. `uv run --directory serving/llava15-lm-lora python
 app.py --help` verified working.
 
 ## Stage 4 — `training/`
@@ -149,7 +183,7 @@ from adapting an existing checkpoint (`fine-tuning/`). Not yet designed.
 
 None of the fine-tuning pipelines ship data — `DATASET/`, `data/`, `runs/`,
 `output/` etc. are all git-ignored, drop-zone folders (via the single root
-`.gitignore`). `llava15-lora/` trains on CNN/DailyMail; `axolotl-ocr-summary/`
+`.gitignore`). `llava15-lm-lora/` trains on CNN/DailyMail; `axolotl-ocr-summary/`
 accepts any matching CSV. Example small, permissively-licensed public
 datasets are listed in the root `README.md`'s **Datasets** section.
 
@@ -159,10 +193,10 @@ datasets are listed in the root `README.md`'s **Datasets** section.
 not assumed, for:
 
 - `pre-training` — `scripts/ocr_detection_png.py`, `scripts/summarize_ocr_gemma.py`
-- `fine-tuning/llava15-lora` — `build_llava15_dataset.py` (including a real
+- `fine-tuning/llava15-lm-lora` — `build_llava15_dataset.py` (including a real
   5-row CNN/DailyMail smoke test), `train_llava15_lora.py`,
   `generate_llava15_lora.py`
-- `serving/llava15-lora` — `app.py` (also fixed a `SyntaxWarning` from
+- `serving/llava15-lm-lora` — `app.py` (also fixed a `SyntaxWarning` from
   unescaped backslashes in three docstrings: `app.py`, `merge_adapter.py`,
   `inspect_weights.py`)
 
@@ -178,11 +212,13 @@ Not executed this pass (no PDFs/poppler set up in this environment):
 
 ## Next steps
 
-- `fine-tuning/llava15-lora` on CNN/DailyMail is ready to actually train —
-  next action is a real run (`train_llava15_lora.py --max-samples <N>`, no
-  `--instruction` override needed since the default now matches), not more
-  plumbing.
+- `fine-tuning/llava15-lm-lora` has a verified-good first run (see above) —
+  reasonable next moves are more epochs (2–3; no overfitting signal yet) or
+  more samples, judged by the reconstruction test, not loss alone.
 - `axolotl-ocr-summary`'s Windows/WSL split should be decided explicitly
   (document as WSL-only vs. investigate a triton-free deepspeed config)
   before it's a blocker for anyone following the root README on Windows.
 - `training/` (from-scratch, non-LoRA) is still undesigned.
+- `fine-tuning/llava15-full-lora` (planned, not started): the first real VLM
+  fine-tune in this repo — image+text pairs, vision encoder/projector
+  actually in the training graph, unlike `llava15-lm-lora`.

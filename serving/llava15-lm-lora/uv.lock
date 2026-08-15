@@ -363,7 +363,7 @@ wheels = [
 ]
 
 [[package]]
-name = "llava15-lora-deploy"
+name = "llava15-lm-lora-deploy"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

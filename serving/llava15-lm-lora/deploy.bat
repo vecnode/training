@@ -40,7 +40,7 @@ if not exist "%VENV_PY%" (
 
 echo.
 echo Starting adapter inference server on http://%APP_HOST%:%APP_PORT%
-echo   model source: merged_model\ (if present) else ..\..\llava15-lora\runs\ adapter
+echo   model source: merged_model\ (if present) else ..\..\llava15-lm-lora\runs\ adapter
 echo   front-end: http://%APP_HOST%:%APP_PORT%/   API: /api/summarize, /api/health
 echo.
 "%VENV_PY%" "%DEPLOY_DIR%\app.py" --host %APP_HOST% --port %APP_PORT%

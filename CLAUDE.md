@@ -19,7 +19,7 @@ root covers the whole repo; subfolders don't get their own.
   wheels yet for some pinned deps like `pillow`, which breaks `uv run` with a
   source-build failure) and its own CUDA torch build; never introduce a
   shared root Python environment.
-- **`fine-tuning/llava15-lora/`** trains a LoRA adapter on
+- **`fine-tuning/llava15-lm-lora/`** trains a LoRA adapter on
   `llava-hf/llava-1.5-7b-hf`'s language backbone only (vision tower unused) —
   it's a generic text-summarization fine-tune, not OCR-specific. It builds
   its JSONL from a local CNN/DailyMail Parquet dump only

@@ -1,7 +1,7 @@
 """Standalone real-world inference for the OCR -> summary LoRA adapter.
 
 This module is deliberately independent of the training code: deployment should
-not import anything from ../../fine-tuning/llava15-lora/. It loads the base LLaVA 1.5
+not import anything from ../../fine-tuning/llava15-lm-lora/. It loads the base LLaVA 1.5
 language model, attaches the trained LoRA adapter (or loads an already-merged
 model), and turns raw OCR text into a one-paragraph summary.
 
@@ -29,10 +29,10 @@ import sys
 from pathlib import Path
 
 _DEPLOY_DIR = Path(__file__).resolve().parent
-# serving/llava15-lora/ -> repo root -> fine-tuning/llava15-lora/
+# serving/llava15-lm-lora/ -> repo root -> fine-tuning/llava15-lm-lora/
 # (the training pipeline this serving folder serves; a top-level sibling of
 # serving/, not a parent - see the repo README for why they're split like this).
-_TRAINING_DIR = _DEPLOY_DIR.parent.parent / "fine-tuning" / "llava15-lora"
+_TRAINING_DIR = _DEPLOY_DIR.parent.parent / "fine-tuning" / "llava15-lm-lora"
 
 # Reuse the training HF cache so the base model is not re-downloaded.
 os.environ.setdefault("HF_HOME", str(_TRAINING_DIR / "hf_cache"))
@@ -42,7 +42,7 @@ import torch
 from transformers import AutoProcessor, LlavaForConditionalGeneration
 
 # ---------------------------------------------------------------------------
-# These MUST stay identical to training (../../fine-tuning/llava15-lora/train_llava15_lora.py).
+# These MUST stay identical to training (../../fine-tuning/llava15-lm-lora/train_llava15_lora.py).
 # If the instruction wording or truncation differs from training, quality drops.
 # ---------------------------------------------------------------------------
 INSTRUCTION = (
@@ -82,7 +82,7 @@ def truncate_ocr_ids(ids: list[int], budget: int) -> list[int]:
 def ensure_base_model_cached(base_id: str) -> str:
     """Ensure the public base model is present in the local Hugging Face cache,
     downloading it on first run if missing. The cache dir is HF_HOME (defaults
-    to ../../fine-tuning/llava15-lora/hf_cache, git-ignored in both a dev checkout and a
+    to ../../fine-tuning/llava15-lm-lora/hf_cache, git-ignored in both a dev checkout and a
     distributed build - it is resolved relative to this file, so it works in
     either layout).
 
@@ -100,7 +100,7 @@ def ensure_base_model_cached(base_id: str) -> str:
     huggingface_hub checks file hashes/etags before deciding what to fetch. Only
     the base model goes through this path; the trained LoRA adapter is never
     downloaded - it is a local artifact that must already exist on disk (copied
-    in, or produced by ../../fine-tuning/llava15-lora/train_llava15_lora.py on this machine).
+    in, or produced by ../../fine-tuning/llava15-lm-lora/train_llava15_lora.py on this machine).
     """
     from huggingface_hub import snapshot_download
 
@@ -167,7 +167,7 @@ class Summarizer:
             if not adapter.exists():
                 raise FileNotFoundError(
                     f"Adapter not found: {adapter}\n"
-                    "../../fine-tuning/llava15-lora/runs/ is gitignored - copy the trained adapter there "
+                    "../../fine-tuning/llava15-lm-lora/runs/ is gitignored - copy the trained adapter there "
                     "(or pass --adapter-dir pointing at it)."
                 )
             base_id = read_base_model_id(adapter, base_model_id)

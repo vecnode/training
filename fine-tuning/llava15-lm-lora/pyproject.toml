@@ -1,5 +1,5 @@
 [project]
-name = "llava15-lora"
+name = "llava15-lm-lora"
 version = "0.1.0"
 description = "LLaVA 1.5 7B LoRA fine-tuning (text-only source text -> summary)"
 requires-python = ">=3.10"

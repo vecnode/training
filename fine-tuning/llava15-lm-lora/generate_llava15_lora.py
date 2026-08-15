@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import os
+import random
 from pathlib import Path
 
 # Keep all Hugging Face artifacts inside training/
@@ -46,6 +47,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out-csv", type=Path, default=_TRAINING_DIR / "runs" / "llava15_lora" / "generated.csv", help="Output CSV with generated predictions (CSV mode)")
     parser.add_argument("--out-metrics", type=Path, default=None, help="Optional output metrics JSON path (CSV mode)")
     parser.add_argument("--max-rows", type=int, default=100, help="Maximum rows to generate (0 = all rows)")
+
+    # Reconstruction-test mode (sanity check: how well did training work?):
+    parser.add_argument("--jsonl-eval", type=Path, default=None, help="Print N generated summaries vs. reference from a training-format JSONL (held-out split, not manual input)")
+    parser.add_argument("--num-samples", type=int, default=5, help="How many held-out examples to print in --jsonl-eval mode")
+    parser.add_argument("--eval-seed", type=int, default=42, help="Must match training's --seed so the held-out split lines up (train_llava15_lora.py default: 42)")
+    parser.add_argument("--eval-val-ratio", type=float, default=0.1, help="Must match training's --val-ratio so the held-out split lines up (train_llava15_lora.py default: 0.1)")
 
     parser.add_argument("--max-length", type=int, default=2048, help="Max input token budget (must match training)")
     parser.add_argument("--max-new-tokens", type=int, default=220, help="Max generated tokens per sample")
@@ -274,6 +281,66 @@ def run_csv(summarizer: Summarizer, args: argparse.Namespace) -> int:
     return 0
 
 
+def run_jsonl_eval(summarizer: Summarizer, args: argparse.Namespace) -> int:
+    """Reconstruction test: generate on held-out examples and print input/reference/generated.
+
+    Replicates train_llava15_lora.py's split (same seed + val_ratio applied to
+    the same JSONL) so these are the actual validation examples the trainer
+    reported eval_loss on, not just arbitrary rows - a genuine held-out check,
+    not a training-set echo test.
+    """
+    path = args.jsonl_eval.resolve()
+    if not path.exists():
+        raise FileNotFoundError(f"JSONL not found: {path}")
+
+    records: list[dict] = []
+    with path.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            item = json.loads(line)
+            if isinstance(item, dict) and item.get("text") and item.get("summary"):
+                records.append(item)
+
+    if not records:
+        raise SystemExit(f"No valid text/summary records found in {path}")
+
+    rng = random.Random(args.eval_seed)
+    rng.shuffle(records)
+    n_val = max(1, int(len(records) * args.eval_val_ratio))
+    val_records = records[:n_val]
+
+    n = min(args.num_samples, len(val_records))
+    sample = val_records[:n]
+
+    print(f"\nHeld-out split: {len(val_records)} record(s) (seed={args.eval_seed}, val_ratio={args.eval_val_ratio})")
+    print(f"Printing {n} sample(s)\n")
+
+    f1_sum = 0.0
+    for i, item in enumerate(sample, start=1):
+        text = item["text"]
+        reference = item["summary"].strip()
+        pred = summarizer.summarize(text)
+        f1 = token_f1(pred, reference)
+        f1_sum += f1
+
+        print("=" * 100)
+        print(f"[{i}/{n}]  id={item.get('id', 'n/a')}  token_f1={f1:.4f}")
+        print("-" * 100)
+        preview = text[:300] + ("..." if len(text) > 300 else "")
+        print(f"SOURCE TEXT ({len(text)} chars):\n{preview}\n")
+        print(f"REFERENCE SUMMARY:\n{reference}\n")
+        print(f"GENERATED SUMMARY:\n{pred}\n")
+
+    print("=" * 100)
+    print(f"\nAverage token F1 over {n} sample(s): {f1_sum / n:.4f}")
+    print("(token F1 is a rough word-overlap proxy, not a quality guarantee - read the")
+    print(" printed pairs above; a low/zero F1 with a coherent, on-topic summary just")
+    print(" means the model paraphrased instead of reusing reference wording.)")
+    return 0
+
+
 def main() -> int:
     args = parse_args()
 
@@ -292,8 +359,11 @@ def main() -> int:
     elif args.text:
         raw_text = args.text.strip()
 
-    if not raw_text and args.source_csv is None:
-        raise SystemExit("Nothing to do: pass --text / --text-file for a single page, or --source-csv for batch mode.")
+    if not raw_text and args.source_csv is None and args.jsonl_eval is None:
+        raise SystemExit(
+            "Nothing to do: pass --text / --text-file for a single page, "
+            "--source-csv for batch mode, or --jsonl-eval for a reconstruction test."
+        )
 
     summarizer = Summarizer(
         adapter_dir=adapter_dir,
@@ -303,6 +373,8 @@ def main() -> int:
         instruction=args.instruction,
     )
 
+    if args.jsonl_eval is not None:
+        return run_jsonl_eval(summarizer, args)
     if raw_text:
         return run_pages(summarizer, raw_text)
     return run_csv(summarizer, args)
