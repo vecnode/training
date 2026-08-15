@@ -41,11 +41,25 @@ root covers the whole repo; subfolders don't get their own.
   trainer and generator, must match between the two) for other wording. A
   planned `llava15-full-lora` sibling (image+text pairs) is where a real
   LLaVA/vision dependency belongs in this repo — not here.
-- **`fine-tuning/axolotl-ocr-summary/`** currently only resolves its `uv`
-  environment on Linux/WSL — `axolotl[deepspeed]` pulls in `triton`, which
-  has no Windows wheels. Don't try to "fix" this by editing that project's
-  `pyproject.toml` without being asked; it's a real platform constraint, not
-  a misconfiguration.
+- **`fine-tuning/qwen25-3b-lora/`** is `vicuna-7b-lora`'s sibling, same
+  `transformers`+`peft` pattern, `Qwen/Qwen2.5-3B-Instruct` instead. LoRA
+  `target_modules` stay `["q_proj", "v_proj"]` (verified same naming as
+  Vicuna via `peft`'s default LoRA target-module table for `qwen2`), but the
+  prompt wrapper is ChatML (`<|im_start|>role\n...<|im_end|>`), not Vicuna's
+  `USER:/ASSISTANT:` — verified against the model's real
+  `tokenizer_config.json` before writing the code. No `protobuf`/
+  `sentencepiece` needed here (Qwen ships a ready `tokenizer.json`). Before
+  cloning this pattern to another base model, verify its actual attention
+  module names first, don't assume `q_proj`/`v_proj` — e.g.
+  `microsoft/Phi-3.5-mini-instruct` fuses Q/K/V into one `qkv_proj` layer
+  (confirmed by reading `Phi3Attention`'s source) and would need
+  `target_modules=["qkv_proj"]` instead, or LoRA silently attaches to
+  nothing.
+- **An Axolotl-based `fine-tuning/axolotl-ocr-summary/` pipeline existed
+  earlier and was removed by the repo owner.** If something similar returns,
+  note `axolotl[deepspeed]` only resolves its `uv` environment on Linux/WSL
+  (`triton` has no Windows wheels) — a real platform constraint, not
+  something to silently patch around.
 - **Never commit data or weights** — one root `.gitignore` covers every
   pipeline's drop-zone folders (`DATASET/`, `data/`, `runs/`, `output/`,
   `outputs/`, `.cache/`, `hf_cache/`, `merged_model/`, model/checkpoint

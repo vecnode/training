@@ -51,9 +51,7 @@ LLaVA checkpoint, since it needs the vision side.
 
 [`abisee/cnn_dailymail`](https://huggingface.co/datasets/abisee/cnn_dailymail)
 (config `3.0.0`), a public, no-setup-required news-summarization dataset.
-`axolotl-ocr-summary/` is a separate pipeline, untouched by this — it already
-accepts CNN/DailyMail via `--text-col article --summary-col highlights` on
-its own CSV-based prep script.
+Same source [`../qwen25-3b-lora/`](../qwen25-3b-lora/README.md) trains on.
 
 **Where the dataset lives:** downloaded locally to
 `C:\Users\luisarandas\Desktop\cnn_dailymail\3.0.0\` (outside this repo, and

@@ -81,4 +81,4 @@ if errorlevel 1 (
     exit /b 1
 )
 
-endlocal & set "VICUNA_PYTHON=%VENV_PY%" & exit /b 0
+endlocal & set "QWEN_PYTHON=%VENV_PY%" & exit /b 0
