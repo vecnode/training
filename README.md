@@ -42,6 +42,12 @@ pre-training\exec_1.bat
 uv run --directory fine-tuning/vicuna-7b-lora python build_vicuna7b_dataset.py --cnn-dailymail-dir "C:\path\to\cnn_dailymail\3.0.0" --max-samples 2000
 uv run --directory fine-tuning/vicuna-7b-lora python train_vicuna7b_lora.py --num-epochs 2 --output-dir runs/vicuna7b_lora
 uv run --directory fine-tuning/vicuna-7b-lora python generate_vicuna7b_lora.py --adapter-dir runs/vicuna7b_lora/final_adapter --jsonl-eval data/vicuna7b_train.jsonl --num-samples 5
+
+# --- fine-tuning/qwen25-3b-lora: Qwen2.5-3B LoRA (transformers + peft) ---
+# same pattern as vicuna-7b-lora, ChatML prompt format
+uv run --directory fine-tuning/qwen25-3b-lora python build_qwen3b_dataset.py --cnn-dailymail-dir "C:\path\to\cnn_dailymail\3.0.0" --max-samples 2000
+uv run --directory fine-tuning/qwen25-3b-lora python train_qwen3b_lora.py --num-epochs 2 --output-dir runs/qwen3b_lora
+uv run --directory fine-tuning/qwen25-3b-lora python generate_qwen3b_lora.py --adapter-dir runs/qwen3b_lora/final_adapter --jsonl-eval data/qwen3b_train.jsonl --num-samples 5
 ```
 
 ## License
