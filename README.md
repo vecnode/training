@@ -8,7 +8,7 @@ Model Training, Pre-Training, Fine-Tuning and Serving workspace, scaling from a 
 
 - [training](./training/)
     - Ongoing
-- [fine-tuning](./)
+- [fine-tuning](./fine-tuning/)
     - Ongoing
 - [pre-training](./pre-training/)
     - Convert a PDF dataset to image dataset
@@ -37,18 +37,24 @@ scripts default to paths relative to where they're run from.
 
 ```sh
 # --- pre-training: PDF corpus -> OCR/summary/layout/QA CSVs ---
-uv run --directory pre-training python scripts/convert_pdf_to_png.py --help
+# Step 1 (PDF -> PNG) shells out to poppler (pdftoppm/pdfinfo on PATH), not a
+# bare Python script - run it via the wrapper, not `uv run ... python`:
+pre-training\exec_1.bat
+# or directly: pre-training\scripts\convert_pdf_to_png.ps1 -DatasetPath Release_1
 uv run --directory pre-training python scripts/ocr_detection_png.py --help
 uv run --directory pre-training python scripts/summarize_ocr_gemma.py --help
 
 # --- fine-tuning/llava15-lora: LLaVA 1.5 7B LoRA (transformers + peft) ---
+# text-only LoRA on the language backbone; JSONL from either source below
+uv run --directory fine-tuning/llava15-lora python build_llava15_dataset.py --cnn-dailymail-dir "C:\path\to\cnn_dailymail\3.0.0" --max-samples 2000
 uv run --directory fine-tuning/llava15-lora python build_llava15_dataset.py --ocr-csv <path> --summaries-csv <path>
 uv run --directory fine-tuning/llava15-lora python train_llava15_lora.py --num-epochs 1 --output-dir runs/llava15_lora
 uv run --directory fine-tuning/llava15-lora python generate_llava15_lora.py --adapter-dir runs/llava15_lora/final_adapter --ocr-text "..."
 
 # --- fine-tuning/axolotl-ocr-summary: Axolotl LoRA/QLoRA (Qwen2.5) ---
+# Linux/WSL only for now: axolotl[deepspeed] depends on triton, which has no
+# Windows wheels, so `uv run` here fails on native Windows.
 uv run --directory fine-tuning/axolotl-ocr-summary python scripts/prepare_dataset.py --input DATASET/your_file.csv --text-col text --summary-col summary --val-split 0.1
-uv run --directory fine-tuning/axolotl-ocr-summary python -m axolotl.cli.train configs/qlora-3090-24gb.yml
 
 # --- serving/llava15-lora: FastAPI inference for the trained adapter ---
 uv run --directory serving/llava15-lora python app.py --port 8008
@@ -58,7 +64,8 @@ uv run --directory serving/llava15-lora python app.py --port 8008
 install step is required — `uv_setup.bat` / `uv_bootstrap.bat` in each folder
 do the same thing and remain for double-click use on Windows. Swap
 `--directory` for the pipeline you're touching; nothing here shares a venv
-across folders.
+across folders. Each project pins its own `.python-version` (`3.12`) so `uv`
+doesn't grab a too-new interpreter lacking prebuilt wheels for pinned deps.
 
 ## License
 

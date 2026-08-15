@@ -11,21 +11,40 @@ rather than by model:
 
 ```
 pre-training/   PDF corpus  -> OCR text, summaries, layout, synthetic QA (CSVs)
-fine-tuning/    OCR/summary CSVs (or any text/summary pairs) -> trained LoRA adapters
+fine-tuning/    text/summary pairs -> trained LoRA adapters
 serving/        trained adapters -> inference (FastAPI)
 training/       reserved for from-scratch / non-LoRA training (not yet built)
 ```
 
 Each leaf folder (`pre-training/`, `fine-tuning/<pipeline>/`,
 `serving/<pipeline>/`) is an independent `uv` project: its own
-`pyproject.toml`, its own `.venv`, its own pinned dependency set (in
+`pyproject.toml`, `uv.lock`, `.python-version`, and pinned dependency set (in
 particular, its own CUDA torch build). Nothing is shared at runtime between
 folders — a pipeline can be deleted or reworked without touching its
 siblings. One `uv` binary at the root drives all of them via
-`uv run --directory <folder> ...` (see the root `README.md` for the full
-command list); there is deliberately no root-level Python project or shared
-virtualenv, since the folders pin conflicting dependency versions (e.g.
-different torch builds) that a single shared resolution would fight.
+`uv run --directory <folder> ...` (see the root `README.md`'s **uv Commands**
+section for the current, verified list); there is deliberately no root-level
+Python project or shared virtualenv, since the folders pin conflicting
+dependency versions (e.g. different torch builds) that a single shared
+resolution would fight.
+
+Repo-wide hygiene is intentionally centralized rather than per-folder: **one**
+`.gitignore` at the root (unanchored patterns match every project's drop-zone
+folders at any depth), and **one** `AGENTS.md`/`CLAUDE.md` pair at the root
+covering conventions for the whole repo. No subfolder should have its own
+copy of any of these.
+
+### Why `.python-version` matters here
+
+Every project pins `.python-version` to `3.12`. Without it, `uv run` picks
+the newest CPython it can find (e.g. `3.14`), and some pinned dependencies —
+`pillow==10.4.0` in particular — have no prebuilt wheel for that new a
+version yet, so `uv` falls back to a from-source build that fails on Windows
+(missing zlib headers). Pinning `3.12` (already installed and known to have
+wheels for every pinned dependency across all four projects) is what makes
+`uv run --directory <folder> ...` work reproducibly from a clean checkout.
+This was verified by reproducing the failure and fixing it during this pass —
+see the **Verified working** list below.
 
 ## Stage 1 — `pre-training/`
 
@@ -35,12 +54,22 @@ Five steps (`exec_1.bat` … `exec_5.bat`, or `main.bat` for an interactive
 menu): PDF → PNG pages → OCR CSV → summary CSV / layout CSV / synthetic-QA
 CSV, all written per-run to `outputs/[timestamp]_[dataset]/`.
 
-**Status:** out of scope for current work — left as-is.
+Step 1 (PDF → PNG) is **not** a standalone Python entry point — it's
+`scripts/convert_pdf_to_png.ps1`, which shells out to `poppler`
+(`pdftoppm`/`pdfinfo` on `PATH`) and a small `compress_png_max.py` helper.
+Run it via `exec_1.bat` or the `.ps1` directly, not `uv run ... python
+scripts/convert_pdf_to_png.py` — that file doesn't exist (an earlier version
+of this doc incorrectly assumed it did; fixed here). Steps 2–5
+(`ocr_detection_png.py`, `summarize_ocr_gemma.py`, `describe_layout_gemma.py`,
+`generate_qa_gemma.py`) are genuine `argparse` Python scripts and do run via
+`uv run --directory pre-training python scripts/<name>.py`.
+
+**Status:** out of scope for active work — left as-is, beyond the
+`.gitignore`/`.python-version` consolidation described above.
 
 ## Stage 2 — `fine-tuning/`
 
-Two independent example pipelines, both currently framed as
-**OCR text → summary text**, both LoRA-based, both sized for a single
+Two independent example pipelines, both LoRA-based, both sized for a single
 RTX 3090 (24GB):
 
 | Pipeline | Framework | Base model | Data shape |
@@ -48,14 +77,59 @@ RTX 3090 (24GB):
 | [`fine-tuning/llava15-lora/`](fine-tuning/llava15-lora/README.md) | `transformers` + `peft` (manual `Trainer` loop) | `llava-hf/llava-1.5-7b-hf` — LoRA on `q_proj`/`v_proj` of the language backbone only. Vision tower is not exercised; this is a text-only fine-tune of a multimodal model. | JSONL with `ocr_text` / `summary` fields |
 | [`fine-tuning/axolotl-ocr-summary/`](fine-tuning/axolotl-ocr-summary/README.md) | [Axolotl](https://axolotl.ai/) (config-driven) | `Qwen/Qwen2.5-3B-Instruct` (full LoRA) or 7-8B (QLoRA) — no vision component | Alpaca-shape JSONL: `{"instruction", "input", "output"}` |
 
-Both currently expect their input as a **CSV with a source-text column and a
-target-summary column**, produced by `pre-training/`'s OCR + summarize steps
-(`llava15-lora/build_llava15_dataset.py` reads the OCR/SUMMARIES CSV pair
-directly; `axolotl-ocr-summary/scripts/prepare_dataset.py` reads any CSV with
-`--text-col`/`--summary-col` flags). Neither pipeline is hard-wired to
-`pre-training/`'s output specifically — any CSV with the right two columns
-works, which is what makes the CNN/DailyMail integration below a data-prep
-problem, not a code-architecture problem.
+**`llava15-lora/` is a generic text-summarization LoRA, not an OCR-only
+pipeline** — this was clarified this pass. The JSONL field is still named
+`ocr_text` (kept for compatibility with the pre-training-CSV source) but it
+now also accepts plain article text from CNN/DailyMail; nothing about the
+trainer, collator, or LoRA config is OCR-specific. What *was* OCR-specific
+was the hardcoded instruction wrapper ("Summarize this scanned document
+page... UAP-related content") — that's now a CLI flag
+(`--instruction`, on both `train_llava15_lora.py` and
+`generate_llava15_lora.py`, must match between the two) instead of a fixed
+constant, so a non-OCR source can use a matching prompt.
+
+Both pipelines expect input as a **table with a source-text column and a
+target-summary column** — a CSV for both, or (new) a CNN/DailyMail Parquet
+dump for `llava15-lora/`:
+
+- `llava15-lora/build_llava15_dataset.py` — either
+  `--ocr-csv`/`--summaries-csv` (pre-training's OCR/SUMMARIES CSV pair,
+  joined on `image`/`full_path`), or `--cnn-dailymail-dir <folder>` (reads
+  the HF `cnn_dailymail` 3.0.0 Parquet shards directly: `article` →
+  `ocr_text`, `highlights` → `summary`, plus `source`/`id` fields for
+  traceability).
+- `axolotl-ocr-summary/scripts/prepare_dataset.py` — any CSV via
+  `--input --text-col --summary-col` (Windows note below).
+
+Neither pipeline is hard-wired to `pre-training/`'s output specifically —
+this is what let CNN/DailyMail slot in as a second, unrelated data source
+without touching the trainers' core logic.
+
+**Platform note — `axolotl-ocr-summary/` is Linux/WSL-only for now.**
+`axolotl[deepspeed]` pulls in `triton`, which publishes no Windows wheels;
+`uv run --directory fine-tuning/axolotl-ocr-summary ...` fails at
+environment-resolution time on native Windows (verified this pass). This is
+a real constraint of that dependency stack, not a bug — not something to
+patch around inside that project without being asked.
+
+### CNN/DailyMail — wired in and verified
+
+Downloaded locally to `C:\Users\luisarandas\Desktop\cnn_dailymail\3.0.0\`
+(outside the repo, outside the root folder, gitignored regardless). Measured
+against the actual files:
+
+| Split | Rows | Size |
+|---|---|---|
+| train (3 shards) | 287,113 | ~772 MB |
+| validation | 13,368 | ~35 MB |
+| test | 11,490 | ~30 MB |
+| **Total** | **311,971** | **~799 MB** |
+
+`article` (avg ~3,950 chars) → `ocr_text`, `highlights` (avg ~260 chars) →
+`summary`. `build_llava15_dataset.py --cnn-dailymail-dir ... --max-samples
+2000` was run end-to-end against the real files and produces valid JSONL
+records; full details and commands in
+[`fine-tuning/llava15-lora/README.md`](fine-tuning/llava15-lora/README.md#cnn-dailymail-source-current-focus).
 
 ## Stage 3 — `serving/`
 
@@ -66,7 +140,8 @@ adapter (or a fused/merged model) once and serves a JSON API plus a
 dataset-browser front-end. Deliberately decoupled from
 `fine-tuning/llava15-lora/` — it only reads the trained adapter directory
 (`../../fine-tuning/llava15-lora/runs/llava15_lora/final_adapter`), never
-imports its training code.
+imports its training code. `uv run --directory serving/llava15-lora python
+app.py --help` verified working.
 
 ## Stage 4 — `training/`
 
@@ -76,52 +151,41 @@ from adapting an existing checkpoint (`fine-tuning/`). Not yet designed.
 ## Datasets
 
 None of the fine-tuning pipelines ship data — `DATASET/`, `data/`, `runs/`,
-`output/` etc. are all git-ignored, drop-zone folders. Today's expected
-source is `pre-training/`'s own OCR/SUMMARIES CSV output, but the actual
-requirement is narrower: any two-column (source-text, target-summary) table.
-
-Example small, permissively-licensed public datasets that fit that shape are
+`output/` etc. are all git-ignored, drop-zone folders (via the single root
+`.gitignore`). `llava15-lora/` now has two live sources (pre-training's
+OCR/SUMMARIES CSVs, or CNN/DailyMail); `axolotl-ocr-summary/` accepts any
+matching CSV. Example small, permissively-licensed public datasets are
 listed in the root `README.md`'s **Datasets** section.
 
-## Next steps — wiring in CNN/DailyMail
+## Verified working (this pass)
 
-Goal: exercise both fine-tuning pipelines against
-[`abisee/cnn_dailymail`](https://huggingface.co/datasets/abisee/cnn_dailymail)
-(`article` → `highlights`) as a stand-in for real OCR/summary data, without
-requiring the dataset to live inside the repo.
+`uv run --directory <folder> python <script> --help` was actually executed,
+not assumed, for:
 
-Planned, not yet implemented (dataset isn't downloaded yet, so this is
-un-tested):
+- `pre-training` — `scripts/ocr_detection_png.py`, `scripts/summarize_ocr_gemma.py`
+- `fine-tuning/llava15-lora` — `build_llava15_dataset.py` (including a real
+  5-row CNN/DailyMail smoke test), `train_llava15_lora.py`,
+  `generate_llava15_lora.py`
+- `serving/llava15-lora` — `app.py` (also fixed a `SyntaxWarning` from
+  unescaped backslashes in three docstrings: `app.py`, `merge_adapter.py`,
+  `inspect_weights.py`)
 
-1. **Keep the dataset off the root and off git.** The user downloads/caches
-   `cnn_dailymail` wherever they like (e.g. via `huggingface_hub` /
-   `datasets.load_dataset`, or a plain CSV export) and points each pipeline
-   at it with an existing or new CLI flag — no new folder convention needed,
-   this already matches how `DATASET/` and `data/` work today (git-ignored
-   drop zones, path passed on the command line).
-2. **`fine-tuning/axolotl-ocr-summary/`** — `scripts/prepare_dataset.py`
-   already accepts an arbitrary CSV + column names, so once CNN/DailyMail is
-   exported to CSV (`article`, `highlights` columns), it's a straight:
-   ```sh
-   uv run --directory fine-tuning/axolotl-ocr-summary python scripts/prepare_dataset.py \
-     --input <path-to-cnn_dailymail>.csv --text-col article --summary-col highlights --val-split 0.1
-   ```
-   No code change required for this pipeline — CSV-in is already the
-   contract.
-3. **`fine-tuning/llava15-lora/`** — `build_llava15_dataset.py` currently
-   hard-assumes the pre-training repo's two-CSV (`-OCR.csv` /
-   `-SUMMARIES.csv`, joined by `full_path`) shape. CNN/DailyMail is a single
-   table with both columns together, so this pipeline needs either (a) a
-   small new `--single-csv --text-col --summary-col` mode added to
-   `build_llava15_dataset.py`, or (b) a separate
-   `build_llava15_dataset_from_csv.py` that emits the same
-   `data/llava15_train.jsonl` (`ocr_text`/`summary` fields) shape. Option (a)
-   is preferred — one script, one JSONL contract, less to keep in sync.
-4. **Smoke-test sizing.** CNN/DailyMail articles are longer and cleaner than
-   scanned-OCR text — worth re-checking the head+tail token-truncation
-   budget in both trainers against real CNN/DailyMail article lengths before
-   trusting loss curves, since it was tuned against noisy OCR text.
-5. **Do this only after the dataset is actually downloaded and inspected** —
-   column names/config (`"3.0.0"` is the standard CNN/DailyMail config) and
-   row count should be confirmed against the real files before touching
-   `build_llava15_dataset.py`, rather than guessing the schema now.
+Confirmed **not** working on native Windows, by design of the dependency,
+not a bug here:
+
+- `fine-tuning/axolotl-ocr-summary` — `triton` has no Windows wheel (see
+  platform note above). Works under WSL/Linux; not attempted here.
+
+Not executed this pass (no PDFs/poppler set up in this environment):
+
+- `pre-training/exec_1.bat` / `scripts/convert_pdf_to_png.ps1`
+
+## Next steps
+
+- `fine-tuning/llava15-lora` on CNN/DailyMail is ready to actually train —
+  next action is a real run (`train_llava15_lora.py --instruction "..."
+  --max-samples <N>`), not more plumbing.
+- `axolotl-ocr-summary`'s Windows/WSL split should be decided explicitly
+  (document as WSL-only vs. investigate a triton-free deepspeed config)
+  before it's a blocker for anyone following the root README on Windows.
+- `training/` (from-scratch, non-LoRA) is still undesigned.

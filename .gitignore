@@ -1,3 +1,8 @@
+# One .gitignore for the whole repo — every pipeline folder is a separate uv
+# project, but none of them need their own ignore file; patterns below are
+# unanchored so they match at any depth (pre-training/.venv/, fine-tuning/
+# llava15-lora/.venv/, etc. are all covered by a single `.venv/` line).
+
 # --- Python / uv ---
 .venv/
 __pycache__/
@@ -5,15 +10,45 @@ __pycache__/
 *.egg-info/
 
 # uv.lock IS committed for reproducibility — do not ignore it.
+# .python-version IS committed — it pins the interpreter uv uses per project.
 
 # --- All downloads / caches live under .cache/ (HF_HOME, UV_CACHE_DIR) ---
 # so cleanup is just `rm -rf .cache/` — nothing else on disk gets touched.
 .cache/
 
-# --- Axolotl / training runtime noise ---
+# --- Hugging Face cache for base models (redownloaded on first run) ---
+hf_cache/
+
+# --- Training/eval runtime noise and large binaries: never committed ---
 wandb/
 *.safetensors
 *.bin
 *.pt
 *.ckpt
 last_run_prepared/
+
+# --- Fused/merged models (regenerable via each pipeline's merge script) ---
+merged_model/
+
+# --- Raw/prepared datasets: drop zones, scripts fetch/generate them locally.
+# Each of these keeps a committed README.md as the only tracked file. ---
+DATASET/*
+!DATASET/README.md
+DATASET_JSONL/*
+!DATASET_JSONL/README.md
+data/*
+!data/README.md
+runs/*
+!runs/README.md
+output/*
+!output/README.md
+outputs/*
+!outputs/README.md
+
+# --- pre-training: PDF corpus + rendered pages + OCR CSVs ---
+*.png
+*.pdf
+*.csv
+Release_1/
+Release_1_PNG/
+conversion_log.txt

@@ -5,9 +5,9 @@ adapter), prints a model summary, and dumps per-tensor stats for a name filter.
 
 Run (from this folder):
 
-    .venv\Scripts\python.exe inspect_weights.py                 # summary + q_proj sample
-    .venv\Scripts\python.exe inspect_weights.py --filter v_proj --limit 20
-    .venv\Scripts\python.exe inspect_weights.py --filter lora_  # only present in adapter mode
+    .venv\\Scripts\\python.exe inspect_weights.py                 # summary + q_proj sample
+    .venv\\Scripts\\python.exe inspect_weights.py --filter v_proj --limit 20
+    .venv\\Scripts\\python.exe inspect_weights.py --filter lora_  # only present in adapter mode
 """
 
 from __future__ import annotations

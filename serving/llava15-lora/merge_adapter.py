@@ -7,12 +7,12 @@ adapter. Use this only if you want a portable, dependency-light artifact.
 
 Run (from this folder):
 
-    .venv\Scripts\python.exe merge_adapter.py --out merged_model
+    .venv\\Scripts\\python.exe merge_adapter.py --out merged_model
 
 Then serve/infer with it:
 
-    .venv\Scripts\python.exe infer.py --merged-model merged_model --text-file page.txt
-    .venv\Scripts\python.exe app.py --merged-model merged_model
+    .venv\\Scripts\\python.exe infer.py --merged-model merged_model --text-file page.txt
+    .venv\\Scripts\\python.exe app.py --merged-model merged_model
 """
 
 from __future__ import annotations

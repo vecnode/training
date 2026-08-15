@@ -10,12 +10,12 @@ the LoRA adapter at ../../fine-tuning/llava15-lora/runs/llava15_lora/final_adapt
 
 Run (from this folder):
 
-    .venv\Scripts\python.exe app.py                 # http://127.0.0.1:8008
-    .venv\Scripts\python.exe app.py --port 9000 --host 0.0.0.0
+    .venv\\Scripts\\python.exe app.py                 # http://127.0.0.1:8008
+    .venv\\Scripts\\python.exe app.py --port 9000 --host 0.0.0.0
 
 or with uvicorn directly:
 
-    .venv\Scripts\python.exe -m uvicorn app:app --host 127.0.0.1 --port 8008
+    .venv\\Scripts\\python.exe -m uvicorn app:app --host 127.0.0.1 --port 8008
 """
 
 from __future__ import annotations

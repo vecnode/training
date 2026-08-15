@@ -28,19 +28,41 @@ dependencies, and do not try to unify these into one `uv` workspace/lockfile.
 The pins differ on purpose (different model classes, different CUDA
 requirements) and a shared resolution would fight that.
 
+Each project also pins its **own** `.python-version` (currently `3.12`
+everywhere). Don't remove these or let a project fall back to "whatever
+Python `uv` finds newest" — a too-new CPython (e.g. 3.14) can lack prebuilt
+wheels for pinned deps like `pillow`, which makes `uv run` fail trying to
+build from source instead of installing a wheel.
+
+`fine-tuning/axolotl-ocr-summary/` currently only resolves on Linux/WSL:
+`axolotl[deepspeed]` depends on `triton`, which ships no Windows wheels. This
+is a real platform constraint of that dependency stack, not a bug to silently
+patch around — flag it rather than reworking that project's pins unprompted.
+
 ## Conventions & guardrails
 
-- **Never commit data or weights.** `DATASET/`, `data/`, `runs/`, `output/`,
+- **One root `.gitignore` covers the whole repo — don't add per-folder
+  `.gitignore` files.** Its patterns are unanchored on purpose so they match
+  at any depth (`DATASET/`, `data/`, `runs/`, `output/`, `outputs/`,
   `.cache/`, `hf_cache/`, `merged_model/`, `*.safetensors`, `*.pt`, `*.csv`
-  etc. are git-ignored across the repo — only code, configs, and README stubs
-  in those folders are versioned. Datasets are downloaded/pointed-to locally,
-  never checked in.
+  etc. are ignored everywhere, not per-project). Only code, configs,
+  `.python-version`, `uv.lock`, and README stubs in those drop-zone folders
+  are versioned. Datasets are downloaded/pointed-to locally, never checked
+  in. Likewise: one root `AGENTS.md`/`CLAUDE.md` pair for the whole repo,
+  not one per pipeline folder.
 - **CSV-in is the fine-tuning data contract.** Both `fine-tuning/` pipelines
   consume a two-column table (source text, target summary) via CLI flags
-  (`--ocr-csv`/`--summaries-csv`, or `--input --text-col --summary-col`) —
-  they are not hard-wired to `pre-training/`'s output specifically. Any
-  dataset matching that shape works; point it via the command line, don't
-  hardcode a path or add a new fixed folder convention.
+  (`--ocr-csv`/`--summaries-csv`/`--cnn-dailymail-dir`, or
+  `--input --text-col --summary-col`) — they are not hard-wired to
+  `pre-training/`'s output specifically. Any dataset matching that shape
+  works; point it via the command line, don't hardcode a path or add a new
+  fixed folder convention. `fine-tuning/llava15-lora/` in particular is a
+  generic text-summarization LoRA now, not an OCR-only pipeline — its JSONL
+  field is still named `ocr_text` for backward compatibility with the
+  pre-training-CSV source, but it holds plain article text when the source
+  is CNN/DailyMail. Its instruction wrapper is a CLI flag
+  (`--instruction` on both the trainer and generator) precisely so it isn't
+  tied to OCR-flavored wording.
 - **Cross-folder references use full relative paths from repo root**, e.g.
   `serving/llava15-lora/` reaches its training counterpart via
   `../../fine-tuning/llava15-lora/`. When moving or renaming a pipeline
