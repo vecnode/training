@@ -74,29 +74,33 @@ RTX 3090 (24GB):
 
 | Pipeline | Framework | Base model | Data shape |
 |---|---|---|---|
-| [`fine-tuning/llava15-lora/`](fine-tuning/llava15-lora/README.md) | `transformers` + `peft` (manual `Trainer` loop) | `llava-hf/llava-1.5-7b-hf` — LoRA on `q_proj`/`v_proj` of the language backbone only. Vision tower is not exercised; this is a text-only fine-tune of a multimodal model. | JSONL with `ocr_text` / `summary` fields |
+| [`fine-tuning/llava15-lora/`](fine-tuning/llava15-lora/README.md) | `transformers` + `peft` (manual `Trainer` loop) | `llava-hf/llava-1.5-7b-hf` — LoRA on `q_proj`/`v_proj` of the language backbone only. Vision tower is not exercised; this is a text-only fine-tune of a multimodal model. | JSONL with `text` / `summary` fields |
 | [`fine-tuning/axolotl-ocr-summary/`](fine-tuning/axolotl-ocr-summary/README.md) | [Axolotl](https://axolotl.ai/) (config-driven) | `Qwen/Qwen2.5-3B-Instruct` (full LoRA) or 7-8B (QLoRA) — no vision component | Alpaca-shape JSONL: `{"instruction", "input", "output"}` |
 
 **`llava15-lora/` is a generic text-summarization LoRA, not an OCR-only
-pipeline** — this was clarified this pass. The JSONL field is still named
-`ocr_text` (kept for compatibility with the pre-training-CSV source) but it
-now also accepts plain article text from CNN/DailyMail; nothing about the
-trainer, collator, or LoRA config is OCR-specific. What *was* OCR-specific
-was the hardcoded instruction wrapper ("Summarize this scanned document
-page... UAP-related content") — that's now a CLI flag
-(`--instruction`, on both `train_llava15_lora.py` and
-`generate_llava15_lora.py`, must match between the two) instead of a fixed
-constant, so a non-OCR source can use a matching prompt.
+pipeline** — the CLI/JSONL naming was cleaned up this pass to match: the
+JSONL field is `text` (was `ocr_text`), `build_llava15_dataset.py`'s CSV flag
+is `--source-csv` (was `--ocr-csv`), and `generate_llava15_lora.py`'s flags
+are `--text`/`--text-file`/`--source-csv` (were `--ocr-text`/
+`--ocr-text-file`/`--ocr-csv`). Nothing about the trainer, collator, or LoRA
+config was ever OCR-specific. What *was* OCR-specific was the hardcoded
+instruction wrapper ("Summarize this scanned document page... UAP-related
+content") — that's a CLI flag (`--instruction`, on both
+`train_llava15_lora.py` and `generate_llava15_lora.py`, must match between
+the two) instead of a fixed constant, so a non-OCR source can use a matching
+prompt. The prompt text and default instruction still legitimately say "OCR"
+when describing that specific scanned-document source — only the
+general-purpose interface (flags, JSONL field names) was renamed.
 
 Both pipelines expect input as a **table with a source-text column and a
 target-summary column** — a CSV for both, or (new) a CNN/DailyMail Parquet
 dump for `llava15-lora/`:
 
 - `llava15-lora/build_llava15_dataset.py` — either
-  `--ocr-csv`/`--summaries-csv` (pre-training's OCR/SUMMARIES CSV pair,
+  `--source-csv`/`--summaries-csv` (pre-training's OCR/SUMMARIES CSV pair,
   joined on `image`/`full_path`), or `--cnn-dailymail-dir <folder>` (reads
   the HF `cnn_dailymail` 3.0.0 Parquet shards directly: `article` →
-  `ocr_text`, `highlights` → `summary`, plus `source`/`id` fields for
+  `text`, `highlights` → `summary`, plus `source`/`id` fields for
   traceability).
 - `axolotl-ocr-summary/scripts/prepare_dataset.py` — any CSV via
   `--input --text-col --summary-col` (Windows note below).
@@ -125,7 +129,7 @@ against the actual files:
 | test | 11,490 | ~30 MB |
 | **Total** | **311,971** | **~799 MB** |
 
-`article` (avg ~3,950 chars) → `ocr_text`, `highlights` (avg ~260 chars) →
+`article` (avg ~3,950 chars) → `text`, `highlights` (avg ~260 chars) →
 `summary`. `build_llava15_dataset.py --cnn-dailymail-dir ... --max-samples
 2000` was run end-to-end against the real files and produces valid JSONL
 records; full details and commands in

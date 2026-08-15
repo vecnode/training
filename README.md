@@ -47,17 +47,9 @@ uv run --directory pre-training python scripts/summarize_ocr_gemma.py --help
 # --- fine-tuning/llava15-lora: LLaVA 1.5 7B LoRA (transformers + peft) ---
 # text-only LoRA on the language backbone; JSONL from either source below
 uv run --directory fine-tuning/llava15-lora python build_llava15_dataset.py --cnn-dailymail-dir "C:\path\to\cnn_dailymail\3.0.0" --max-samples 2000
-uv run --directory fine-tuning/llava15-lora python build_llava15_dataset.py --ocr-csv <path> --summaries-csv <path>
+uv run --directory fine-tuning/llava15-lora python build_llava15_dataset.py --source-csv <path> --summaries-csv <path>
 uv run --directory fine-tuning/llava15-lora python train_llava15_lora.py --num-epochs 1 --output-dir runs/llava15_lora
-uv run --directory fine-tuning/llava15-lora python generate_llava15_lora.py --adapter-dir runs/llava15_lora/final_adapter --ocr-text "..."
-
-# --- fine-tuning/axolotl-ocr-summary: Axolotl LoRA/QLoRA (Qwen2.5) ---
-# Linux/WSL only for now: axolotl[deepspeed] depends on triton, which has no
-# Windows wheels, so `uv run` here fails on native Windows.
-uv run --directory fine-tuning/axolotl-ocr-summary python scripts/prepare_dataset.py --input DATASET/your_file.csv --text-col text --summary-col summary --val-split 0.1
-
-# --- serving/llava15-lora: FastAPI inference for the trained adapter ---
-uv run --directory serving/llava15-lora python app.py --port 8008
+uv run --directory fine-tuning/llava15-lora python generate_llava15_lora.py --adapter-dir runs/llava15_lora/final_adapter --text "..."
 ```
 
 `uv run` bootstraps `.venv` and syncs deps on first call, so no separate

@@ -21,12 +21,14 @@ root covers the whole repo; subfolders don't get their own.
   shared root Python environment.
 - **`fine-tuning/llava15-lora/`** trains a LoRA adapter on
   `llava-hf/llava-1.5-7b-hf`'s language backbone only (vision tower unused) —
-  it's a generic text-summarization fine-tune, not OCR-specific despite the
-  field name `ocr_text` in its JSONL contract (kept for compatibility with
-  the pre-training-CSV source). Two interchangeable data sources:
-  pre-training's OCR/SUMMARIES CSVs, or a local CNN/DailyMail parquet dump
-  via `build_llava15_dataset.py --cnn-dailymail-dir`. The instruction wrapper
-  is a CLI flag (`--instruction`, both trainer and generator) — it must match
+  it's a generic text-summarization fine-tune, not OCR-specific. Its CLI
+  flags and JSONL field are named generically (`--source-csv`, `--text`,
+  `--text-file`, JSONL field `text`) rather than `ocr_*`, on purpose — don't
+  reintroduce `ocr_*` naming into this pipeline's general-purpose interface.
+  Two interchangeable data sources: pre-training's OCR/SUMMARIES CSVs, or a
+  local CNN/DailyMail parquet dump via
+  `build_llava15_dataset.py --cnn-dailymail-dir`. The instruction wrapper is
+  a CLI flag (`--instruction`, both trainer and generator) — it must match
   between training and generation, and the OCR-flavored default is wrong for
   non-OCR sources like CNN/DailyMail.
 - **`fine-tuning/axolotl-ocr-summary/`** currently only resolves its `uv`

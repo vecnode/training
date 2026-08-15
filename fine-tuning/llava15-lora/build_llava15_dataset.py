@@ -20,20 +20,20 @@ def parse_args() -> argparse.Namespace:
     here = Path(__file__).resolve()
     default_root = here.parents[1]
 
-    parser = argparse.ArgumentParser(description="Build LLaVA 1.5 training JSONL from OCR and summaries CSV files, or from a CNN/DailyMail parquet dump")
+    parser = argparse.ArgumentParser(description="Build LLaVA 1.5 training JSONL from source-text and summaries CSV files, or from a CNN/DailyMail parquet dump")
     parser.add_argument("--root", type=Path, default=default_root, help="Project root directory")
-    parser.add_argument("--ocr-csv", type=Path, default=None, help="Path to OCR CSV (default: <root>/output/Release_1_OCR.csv)")
+    parser.add_argument("--source-csv", type=Path, default=None, help="Path to source-text CSV, e.g. pre-training's OCR CSV (default: <root>/output/Release_1_OCR.csv)")
     parser.add_argument("--summaries-csv", type=Path, default=None, help="Path to summaries CSV (default: <root>/output/Release_1_SUMMARIES.csv)")
     parser.add_argument("--out-jsonl", type=Path, default=here.parent / "data" / "llava15_train.jsonl", help="Output JSONL path (default: training/data/llava15_train.jsonl)")
     parser.add_argument("--max-samples", type=int, default=0, help="Optional cap for quick tests (0 = all)")
-    parser.add_argument("--max-ocr-chars", type=int, default=8000, help="Cap OCR text stored per sample (the trainer further truncates by tokens, head+tail, to fit the summary)")
+    parser.add_argument("--max-text-chars", type=int, default=8000, help="Cap source text stored per sample (the trainer further truncates by tokens, head+tail, to fit the summary)")
     parser.add_argument(
         "--cnn-dailymail-dir",
         type=Path,
         default=None,
         help="Directory of CNN/DailyMail parquet files (e.g. .../cnn_dailymail/3.0.0), as downloaded from "
-        "https://huggingface.co/datasets/abisee/cnn_dailymail. When set, --ocr-csv/--summaries-csv are ignored "
-        "and this source is used instead: article -> ocr_text, highlights -> summary.",
+        "https://huggingface.co/datasets/abisee/cnn_dailymail. When set, --source-csv/--summaries-csv are ignored "
+        "and this source is used instead: article -> text, highlights -> summary.",
     )
     parser.add_argument(
         "--cnn-dailymail-split",
@@ -66,13 +66,13 @@ def build_from_cnn_dailymail(args: argparse.Namespace, out_jsonl: Path) -> None:
             if not article or not summary:
                 continue
 
-            ocr_text = article[: args.max_ocr_chars]
-            prompt = f"{CNN_DAILYMAIL_PROMPT_INSTRUCTION}{ocr_text}"
+            text = article[: args.max_text_chars]
+            prompt = f"{CNN_DAILYMAIL_PROMPT_INSTRUCTION}{text}"
 
             sample = {
                 "source": "cnn_dailymail",
                 "id": row.id,
-                "ocr_text": ocr_text,
+                "text": text,
                 "prompt": prompt,
                 "summary": summary,
             }
@@ -95,7 +95,7 @@ def normalize_image_key(value: str) -> str:
 
 
 def resolve_image_path(root: Path, image_key: str, full_path: str = "") -> Path | None:
-    # Prefer the absolute full_path column from the OCR CSV when present
+    # Prefer the absolute full_path column from the source CSV when present
     if full_path:
         p = Path(full_path)
         if p.exists():
@@ -152,11 +152,11 @@ def main() -> int:
         build_from_cnn_dailymail(args, out_jsonl)
         return 0
 
-    ocr_csv = (args.ocr_csv or (root / "output" / "Release_1_OCR.csv")).resolve()
+    source_csv = (args.source_csv or (root / "output" / "Release_1_OCR.csv")).resolve()
     summaries_csv = (args.summaries_csv or (root / "output" / "Release_1_SUMMARIES.csv")).resolve()
 
-    if not ocr_csv.exists():
-        raise FileNotFoundError(f"OCR CSV not found: {ocr_csv}")
+    if not source_csv.exists():
+        raise FileNotFoundError(f"Source CSV not found: {source_csv}")
     if not summaries_csv.exists():
         raise FileNotFoundError(f"Summaries CSV not found: {summaries_csv}")
 
@@ -164,22 +164,22 @@ def main() -> int:
 
     kept = 0
     skipped_missing_summary = 0
-    skipped_bad_ocr = 0
+    skipped_bad_source = 0
     skipped_missing_image = 0
 
     out_jsonl.parent.mkdir(parents=True, exist_ok=True)
-    with ocr_csv.open("r", encoding="utf-8", newline="") as src, out_jsonl.open("w", encoding="utf-8") as dst:
+    with source_csv.open("r", encoding="utf-8", newline="") as src, out_jsonl.open("w", encoding="utf-8") as dst:
         reader = csv.DictReader(src)
         for row in reader:
             image_key = normalize_image_key(row.get("image") or "")
             if not image_key:
                 continue
 
-            ocr_text = (row.get("text") or "").strip()
-            ocr_status = (row.get("status") or "").strip().lower()
+            text = (row.get("text") or "").strip()
+            row_status = (row.get("status") or "").strip().lower()
 
-            if (not ocr_text) or (ocr_text == "(no text detected)") or (ocr_status in {"error", "empty", "legacy"}):
-                skipped_bad_ocr += 1
+            if (not text) or (text == "(no text detected)") or (row_status in {"error", "empty", "legacy"}):
+                skipped_bad_source += 1
                 continue
 
             summary = summaries_by_image.get(image_key, "")
@@ -196,13 +196,13 @@ def main() -> int:
             prompt = (
                 "Summarize this scanned document page in one concise paragraph. "
                 "Focus on key entities, dates, events, and any UAP-related content if present.\n\n"
-                f"OCR text:\n{ocr_text[: args.max_ocr_chars]}"
+                f"OCR text:\n{text[: args.max_text_chars]}"
             )
 
             sample = {
                 "image_key": image_key,
                 "image_path": str(img_path),
-                "ocr_text": ocr_text[: args.max_ocr_chars],
+                "text": text[: args.max_text_chars],
                 "prompt": prompt,
                 "summary": summary,
             }
@@ -213,7 +213,7 @@ def main() -> int:
                 break
 
     print(f"Wrote {kept} sample(s) to: {out_jsonl}")
-    print(f"Skipped due to OCR quality: {skipped_bad_ocr}")
+    print(f"Skipped due to source-text quality: {skipped_bad_source}")
     print(f"Skipped missing summary: {skipped_missing_summary}")
     print(f"Skipped missing image: {skipped_missing_image}")
     return 0

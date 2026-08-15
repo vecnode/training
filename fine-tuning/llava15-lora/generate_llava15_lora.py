@@ -28,22 +28,22 @@ DEFAULT_INSTRUCTION = (
     "OCR text:\n"
 )
 
-# In a --ocr-text-file you can stack several OCR pages separated by a line
+# In a --text-file you can stack several pages/articles separated by a line
 # containing this token; each chunk is summarized independently.
 PAGE_DELIM = "===PAGEBREAK==="
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate summaries from OCR text with a trained LLaVA LoRA adapter (text-only)")
+    parser = argparse.ArgumentParser(description="Generate summaries from source text with a trained LLaVA LoRA adapter (text-only)")
     parser.add_argument("--adapter-dir", type=Path, default=_TRAINING_DIR / "runs" / "llava15_lora" / "final_adapter", help="Path to trained LoRA adapter directory")
     parser.add_argument("--model-id", default="", help="Base model id (auto-detected from adapter config when omitted)")
 
-    # Single raw-OCR mode (paste new text and get one summary):
-    parser.add_argument("--ocr-text", default="", help="Raw OCR text to summarize directly (single page)")
-    parser.add_argument("--ocr-text-file", type=Path, default=None, help="Read raw OCR text from this file (single page)")
+    # Single raw-text mode (paste new text and get one summary):
+    parser.add_argument("--text", default="", help="Raw source text to summarize directly (single page/article)")
+    parser.add_argument("--text-file", type=Path, default=None, help="Read raw source text from this file (single page/article)")
 
     # Batch CSV mode:
-    parser.add_argument("--ocr-csv", type=Path, default=None, help="OCR CSV input (e.g., ../output/Release_1_OCR.csv)")
+    parser.add_argument("--source-csv", type=Path, default=None, help="Source-text CSV input (e.g., ../output/Release_1_OCR.csv)")
     parser.add_argument("--reference-csv", type=Path, default=None, help="Optional reference summaries CSV for token-F1 (e.g., ../output/Release_1_SUMMARIES.csv)")
     parser.add_argument("--out-csv", type=Path, default=_TRAINING_DIR / "runs" / "llava15_lora" / "generated.csv", help="Output CSV with generated predictions (CSV mode)")
     parser.add_argument("--out-metrics", type=Path, default=None, help="Optional output metrics JSON path (CSV mode)")
@@ -55,8 +55,8 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def truncate_ocr_ids(ids: list[int], budget: int) -> list[int]:
-    """Fit OCR token ids into `budget`, keeping the head and tail of the page."""
+def truncate_text_ids(ids: list[int], budget: int) -> list[int]:
+    """Fit source token ids into `budget`, keeping the head and tail of the page."""
     if budget <= 0:
         return []
     if len(ids) <= budget:
@@ -134,7 +134,7 @@ def token_f1(pred: str, ref: str) -> float:
 
 
 class Summarizer:
-    """Loads the base model + LoRA adapter and turns OCR text into a summary."""
+    """Loads the base model + LoRA adapter and turns source text into a summary."""
 
     def __init__(self, adapter_dir: Path, base_model_id: str, max_length: int, max_new_tokens: int, instruction: str = DEFAULT_INSTRUCTION):
         self.max_length = max_length
@@ -151,18 +151,18 @@ class Summarizer:
         self.model = model.to(self.device)
         self.model.eval()
 
-        # Precompute the fixed wrapper so only the OCR body is re-tokenized per call.
+        # Precompute the fixed wrapper so only the source body is re-tokenized per call.
         self.head_ids = self.tokenizer(f"USER: {instruction}", add_special_tokens=True).input_ids
         self.suffix_ids = self.tokenizer(" ASSISTANT: ", add_special_tokens=False).input_ids
 
-    def build_input_ids(self, ocr_text: str) -> list[int]:
+    def build_input_ids(self, text: str) -> list[int]:
         budget = self.max_length - len(self.head_ids) - len(self.suffix_ids) - self.max_new_tokens
-        ocr_ids = self.tokenizer(ocr_text, add_special_tokens=False).input_ids
-        ocr_ids = truncate_ocr_ids(ocr_ids, budget)
-        return self.head_ids + ocr_ids + self.suffix_ids
+        text_ids = self.tokenizer(text, add_special_tokens=False).input_ids
+        text_ids = truncate_text_ids(text_ids, budget)
+        return self.head_ids + text_ids + self.suffix_ids
 
-    def summarize(self, ocr_text: str) -> str:
-        ids = self.build_input_ids(ocr_text)
+    def summarize(self, text: str) -> str:
+        ids = self.build_input_ids(text)
         input_ids = torch.tensor([ids], dtype=torch.long, device=self.device)
         attention_mask = torch.ones_like(input_ids)
 
@@ -180,7 +180,7 @@ class Summarizer:
 
 
 def _strip_comments(chunk: str) -> str:
-    # Lines starting with '#' are human-readable labels, not OCR content.
+    # Lines starting with '#' are human-readable labels, not source content.
     return "\n".join(ln for ln in chunk.splitlines() if not ln.lstrip().startswith("#")).strip()
 
 
@@ -188,20 +188,20 @@ def run_pages(summarizer: Summarizer, raw_text: str) -> int:
     pages = [_strip_comments(p) for p in raw_text.split(PAGE_DELIM)]
     pages = [p for p in pages if p]
     if not pages:
-        raise SystemExit("No OCR text found in the input.")
+        raise SystemExit("No source text found in the input.")
 
     for idx, page in enumerate(pages, start=1):
         summary = summarizer.summarize(page)
-        print(f"\n=== Generated summary {idx}/{len(pages)}  ({len(page)} OCR chars) ===\n")
+        print(f"\n=== Generated summary {idx}/{len(pages)}  ({len(page)} chars) ===\n")
         print(summary)
     print()
     return 0
 
 
 def run_csv(summarizer: Summarizer, args: argparse.Namespace) -> int:
-    ocr_csv = args.ocr_csv.resolve()
-    if not ocr_csv.exists():
-        raise FileNotFoundError(f"OCR CSV not found: {ocr_csv}")
+    source_csv = args.source_csv.resolve()
+    if not source_csv.exists():
+        raise FileNotFoundError(f"Source CSV not found: {source_csv}")
 
     out_csv = args.out_csv.resolve()
     out_csv.parent.mkdir(parents=True, exist_ok=True)
@@ -209,17 +209,17 @@ def run_csv(summarizer: Summarizer, args: argparse.Namespace) -> int:
 
     reference_map = load_reference_map(args.reference_csv.resolve() if args.reference_csv else None)
 
-    print(f"OCR CSV: {ocr_csv}")
+    print(f"Source CSV: {source_csv}")
     print(f"Output CSV: {out_csv}")
 
     rows_written = 0
-    skipped_bad_ocr = 0
+    skipped_bad_source = 0
     with_refs = 0
     f1_sum = 0.0
 
-    with ocr_csv.open("r", encoding="utf-8", newline="") as src, out_csv.open("w", encoding="utf-8", newline="") as dst:
+    with source_csv.open("r", encoding="utf-8", newline="") as src, out_csv.open("w", encoding="utf-8", newline="") as dst:
         reader = csv.DictReader(src)
-        writer = csv.DictWriter(dst, fieldnames=["row_id", "image_key", "prediction", "reference", "token_f1", "ocr_chars"])
+        writer = csv.DictWriter(dst, fieldnames=["row_id", "image_key", "prediction", "reference", "token_f1", "text_chars"])
         writer.writeheader()
 
         for row in reader:
@@ -227,14 +227,14 @@ def run_csv(summarizer: Summarizer, args: argparse.Namespace) -> int:
                 break
 
             image_key = normalize_image_key(row.get("image") or "")
-            ocr_text = (row.get("text") or "").strip()
-            ocr_status = (row.get("status") or "").strip().lower()
+            text = (row.get("text") or "").strip()
+            row_status = (row.get("status") or "").strip().lower()
 
-            if (not ocr_text) or ocr_text == "(no text detected)" or (ocr_status in {"error", "empty", "legacy"}):
-                skipped_bad_ocr += 1
+            if (not text) or text == "(no text detected)" or (row_status in {"error", "empty", "legacy"}):
+                skipped_bad_source += 1
                 continue
 
-            pred = summarizer.summarize(ocr_text)
+            pred = summarizer.summarize(text)
 
             ref = reference_map.get(image_key, "")
             f1 = token_f1(pred, ref) if ref else 0.0
@@ -250,7 +250,7 @@ def run_csv(summarizer: Summarizer, args: argparse.Namespace) -> int:
                     "prediction": pred,
                     "reference": ref,
                     "token_f1": f"{f1:.4f}" if ref else "",
-                    "ocr_chars": len(ocr_text),
+                    "text_chars": len(text),
                 }
             )
 
@@ -259,10 +259,10 @@ def run_csv(summarizer: Summarizer, args: argparse.Namespace) -> int:
 
     metrics = {
         "adapter_dir": str(args.adapter_dir.resolve()),
-        "ocr_csv": str(ocr_csv),
+        "source_csv": str(source_csv),
         "output_csv": str(out_csv),
         "rows_written": rows_written,
-        "skipped_bad_ocr": skipped_bad_ocr,
+        "skipped_bad_source": skipped_bad_source,
         "rows_with_reference": with_refs,
         "avg_token_f1": (f1_sum / with_refs) if with_refs else None,
     }
@@ -287,15 +287,15 @@ def main() -> int:
     print(f"Adapter: {adapter_dir}")
     print(f"Base model: {base_model_id}")
 
-    # Resolve the raw-OCR single input, if any.
+    # Resolve the raw single-text input, if any.
     raw_text = ""
-    if args.ocr_text_file is not None:
-        raw_text = args.ocr_text_file.resolve().read_text(encoding="utf-8").strip()
-    elif args.ocr_text:
-        raw_text = args.ocr_text.strip()
+    if args.text_file is not None:
+        raw_text = args.text_file.resolve().read_text(encoding="utf-8").strip()
+    elif args.text:
+        raw_text = args.text.strip()
 
-    if not raw_text and args.ocr_csv is None:
-        raise SystemExit("Nothing to do: pass --ocr-text / --ocr-text-file for a single page, or --ocr-csv for batch mode.")
+    if not raw_text and args.source_csv is None:
+        raise SystemExit("Nothing to do: pass --text / --text-file for a single page, or --source-csv for batch mode.")
 
     summarizer = Summarizer(
         adapter_dir=adapter_dir,

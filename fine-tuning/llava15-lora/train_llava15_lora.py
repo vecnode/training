@@ -162,8 +162,8 @@ DEFAULT_INSTRUCTION = (
 )
 
 
-def truncate_ocr_ids(ids: list[int], budget: int) -> list[int]:
-    """Fit OCR token ids into `budget`, keeping the head and tail of the page.
+def truncate_text_ids(ids: list[int], budget: int) -> list[int]:
+    """Fit source token ids into `budget`, keeping the head and tail of the page.
 
     Diplomatic cables carry the most identifying signal at the top (subject,
     sender, date) and useful context at the bottom (declass notes, conclusions),
@@ -192,17 +192,18 @@ class JsonlDataset(Dataset):
 
 
 class LlavaCollator:
-    """Text-only OCR -> summary collator.
+    """Text-only source-text -> summary collator.
 
-    The image is intentionally NOT used. The OCR text already carries all the
-    signal we want to summarize, so we train the LLaVA language backbone as a
-    pure text model (no <image> token, no pixel_values). This also removes the
-    <image> token-expansion mismatch that previously leaked the prompt and OCR
-    text into the loss target, which made the model copy its input instead of
-    summarizing.
+    The image is intentionally NOT used. The source text already carries all
+    the signal we want to summarize, so we train the LLaVA language backbone
+    as a pure text model (no <image> token, no pixel_values). This also
+    removes the <image> token-expansion mismatch that previously leaked the
+    prompt and source text into the loss target, which made the model copy
+    its input instead of summarizing.
 
-    Labels are masked everywhere except the summary, and the OCR is truncated by
-    tokens so the summary is *always* fully present in the loss budget.
+    Labels are masked everywhere except the summary, and the source text is
+    truncated by tokens so the summary is *always* fully present in the loss
+    budget.
     """
 
     def __init__(self, processor: AutoProcessor, max_length: int = 2048, max_summary_tokens: int = 256, instruction: str = DEFAULT_INSTRUCTION):
@@ -223,19 +224,19 @@ class LlavaCollator:
         labels_list: list[list[int]] = []
 
         for item in features:
-            ocr_text = (item.get("ocr_text") or "").strip()
+            text = (item.get("text") or "").strip()
             summary = (item.get("summary") or "").strip()
 
             summary_ids = tok(summary, add_special_tokens=False).input_ids[: self.max_summary_tokens]
             summary_ids = summary_ids + [eos_id]
 
-            ocr_budget = self.max_length - len(head_ids) - len(suffix_ids) - len(summary_ids)
-            ocr_ids = tok(ocr_text, add_special_tokens=False).input_ids
-            ocr_ids = truncate_ocr_ids(ocr_ids, ocr_budget)
+            text_budget = self.max_length - len(head_ids) - len(suffix_ids) - len(summary_ids)
+            text_ids = tok(text, add_special_tokens=False).input_ids
+            text_ids = truncate_text_ids(text_ids, text_budget)
 
-            ids = head_ids + ocr_ids + suffix_ids + summary_ids
+            ids = head_ids + text_ids + suffix_ids + summary_ids
             # Loss only on the summary; everything before it is context.
-            labels = ([-100] * (len(head_ids) + len(ocr_ids) + len(suffix_ids))) + summary_ids
+            labels = ([-100] * (len(head_ids) + len(text_ids) + len(suffix_ids))) + summary_ids
 
             input_ids_list.append(ids)
             labels_list.append(labels)
@@ -293,8 +294,8 @@ def read_jsonl(path: Path) -> list[dict[str, str]]:
             item = json.loads(line)
             if not isinstance(item, dict):
                 continue
-            # Text-only training: we need OCR text and a summary; image fields are ignored.
-            if not item.get("ocr_text") or not item.get("summary"):
+            # Text-only training: we need source text and a summary; image fields are ignored.
+            if not item.get("text") or not item.get("summary"):
                 continue
             records.append(item)
     return records

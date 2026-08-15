@@ -52,15 +52,16 @@ patch around — flag it rather than reworking that project's pins unprompted.
   not one per pipeline folder.
 - **CSV-in is the fine-tuning data contract.** Both `fine-tuning/` pipelines
   consume a two-column table (source text, target summary) via CLI flags
-  (`--ocr-csv`/`--summaries-csv`/`--cnn-dailymail-dir`, or
+  (`--source-csv`/`--summaries-csv`/`--cnn-dailymail-dir`, or
   `--input --text-col --summary-col`) — they are not hard-wired to
   `pre-training/`'s output specifically. Any dataset matching that shape
   works; point it via the command line, don't hardcode a path or add a new
   fixed folder convention. `fine-tuning/llava15-lora/` in particular is a
-  generic text-summarization LoRA now, not an OCR-only pipeline — its JSONL
-  field is still named `ocr_text` for backward compatibility with the
-  pre-training-CSV source, but it holds plain article text when the source
-  is CNN/DailyMail. Its instruction wrapper is a CLI flag
+  generic text-summarization LoRA, not an OCR-only pipeline — its CLI flags
+  and JSONL field are named generically (`--source-csv`, `--text`,
+  `--text-file`, JSONL field `text`), not `ocr_*`, precisely because the
+  source can be plain article text (CNN/DailyMail) as easily as OCR output.
+  Its instruction wrapper is a CLI flag
   (`--instruction` on both the trainer and generator) precisely so it isn't
   tied to OCR-flavored wording.
 - **Cross-folder references use full relative paths from repo root**, e.g.
