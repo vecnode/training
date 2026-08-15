@@ -5,19 +5,85 @@ import csv
 import json
 from pathlib import Path
 
+# News-article instruction, distinct from the scanned-OCR-page one below —
+# pass this to train_llava15_lora.py's --instruction when training on this
+# source, since "scanned document page" / "UAP-related content" is specific
+# to the pre-training repo's declassified-document use case.
+CNN_DAILYMAIL_PROMPT_INSTRUCTION = (
+    "Summarize this news article in one concise paragraph. "
+    "Focus on key entities, dates, and events.\n\n"
+    "Article text:\n"
+)
+
 
 def parse_args() -> argparse.Namespace:
     here = Path(__file__).resolve()
     default_root = here.parents[1]
 
-    parser = argparse.ArgumentParser(description="Build LLaVA 1.5 training JSONL from OCR and summaries CSV files")
+    parser = argparse.ArgumentParser(description="Build LLaVA 1.5 training JSONL from OCR and summaries CSV files, or from a CNN/DailyMail parquet dump")
     parser.add_argument("--root", type=Path, default=default_root, help="Project root directory")
     parser.add_argument("--ocr-csv", type=Path, default=None, help="Path to OCR CSV (default: <root>/output/Release_1_OCR.csv)")
     parser.add_argument("--summaries-csv", type=Path, default=None, help="Path to summaries CSV (default: <root>/output/Release_1_SUMMARIES.csv)")
     parser.add_argument("--out-jsonl", type=Path, default=here.parent / "data" / "llava15_train.jsonl", help="Output JSONL path (default: training/data/llava15_train.jsonl)")
     parser.add_argument("--max-samples", type=int, default=0, help="Optional cap for quick tests (0 = all)")
     parser.add_argument("--max-ocr-chars", type=int, default=8000, help="Cap OCR text stored per sample (the trainer further truncates by tokens, head+tail, to fit the summary)")
+    parser.add_argument(
+        "--cnn-dailymail-dir",
+        type=Path,
+        default=None,
+        help="Directory of CNN/DailyMail parquet files (e.g. .../cnn_dailymail/3.0.0), as downloaded from "
+        "https://huggingface.co/datasets/abisee/cnn_dailymail. When set, --ocr-csv/--summaries-csv are ignored "
+        "and this source is used instead: article -> ocr_text, highlights -> summary.",
+    )
+    parser.add_argument(
+        "--cnn-dailymail-split",
+        choices=["train", "validation", "test"],
+        default="train",
+        help="Which CNN/DailyMail parquet split to read (default: train)",
+    )
     return parser.parse_args()
+
+
+def build_from_cnn_dailymail(args: argparse.Namespace, out_jsonl: Path) -> None:
+    import pandas as pd
+
+    parquet_dir = args.cnn_dailymail_dir.resolve()
+    if not parquet_dir.exists():
+        raise FileNotFoundError(f"CNN/DailyMail parquet directory not found: {parquet_dir}")
+
+    files = sorted(parquet_dir.glob(f"{args.cnn_dailymail_split}-*.parquet"))
+    if not files:
+        raise FileNotFoundError(f"No '{args.cnn_dailymail_split}-*.parquet' files found in {parquet_dir}")
+
+    df = pd.concat([pd.read_parquet(f, columns=["article", "highlights", "id"]) for f in files], ignore_index=True)
+
+    out_jsonl.parent.mkdir(parents=True, exist_ok=True)
+    kept = 0
+    with out_jsonl.open("w", encoding="utf-8") as dst:
+        for row in df.itertuples(index=False):
+            article = (row.article or "").strip()
+            summary = (row.highlights or "").strip()
+            if not article or not summary:
+                continue
+
+            ocr_text = article[: args.max_ocr_chars]
+            prompt = f"{CNN_DAILYMAIL_PROMPT_INSTRUCTION}{ocr_text}"
+
+            sample = {
+                "source": "cnn_dailymail",
+                "id": row.id,
+                "ocr_text": ocr_text,
+                "prompt": prompt,
+                "summary": summary,
+            }
+            dst.write(json.dumps(sample, ensure_ascii=False) + "\n")
+            kept += 1
+
+            if args.max_samples and kept >= args.max_samples:
+                break
+
+    print(f"Wrote {kept} sample(s) from CNN/DailyMail ({args.cnn_dailymail_split} split) to: {out_jsonl}")
+    print(f"Source rows available in split: {len(df)}")
 
 
 def normalize_image_key(value: str) -> str:
@@ -77,13 +143,17 @@ def main() -> int:
     args = parse_args()
     root = args.root.resolve()
 
-    ocr_csv = (args.ocr_csv or (root / "output" / "Release_1_OCR.csv")).resolve()
-    summaries_csv = (args.summaries_csv or (root / "output" / "Release_1_SUMMARIES.csv")).resolve()
-
     script_dir = Path(__file__).resolve().parent
     out_jsonl = args.out_jsonl
     if not out_jsonl.is_absolute():
         out_jsonl = (script_dir / out_jsonl).resolve()
+
+    if args.cnn_dailymail_dir is not None:
+        build_from_cnn_dailymail(args, out_jsonl)
+        return 0
+
+    ocr_csv = (args.ocr_csv or (root / "output" / "Release_1_OCR.csv")).resolve()
+    summaries_csv = (args.summaries_csv or (root / "output" / "Release_1_SUMMARIES.csv")).resolve()
 
     if not ocr_csv.exists():
         raise FileNotFoundError(f"OCR CSV not found: {ocr_csv}")

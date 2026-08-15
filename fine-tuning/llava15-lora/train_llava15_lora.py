@@ -150,9 +150,12 @@ class CheckpointTrackerCallback(TrainerCallback):
 
 
 # Instruction wrapper. Must stay identical between training and generation so the
-# model sees the same prefix at inference time. The OCR page text is appended
+# model sees the same prefix at inference time. The source text is appended
 # after this block; the model is trained to produce the ASSISTANT summary only.
-INSTRUCTION = (
+# This default is tuned for the pre-training repo's scanned-OCR pages; pass
+# --instruction to override it for other sources (e.g. CNN/DailyMail news
+# articles - see build_llava15_dataset.py's CNN_DAILYMAIL_PROMPT_INSTRUCTION).
+DEFAULT_INSTRUCTION = (
     "Summarize this scanned document page in one concise paragraph. "
     "Focus on key entities, dates, events, and any UAP-related content if present.\n\n"
     "OCR text:\n"
@@ -202,17 +205,18 @@ class LlavaCollator:
     tokens so the summary is *always* fully present in the loss budget.
     """
 
-    def __init__(self, processor: AutoProcessor, max_length: int = 2048, max_summary_tokens: int = 256):
+    def __init__(self, processor: AutoProcessor, max_length: int = 2048, max_summary_tokens: int = 256, instruction: str = DEFAULT_INSTRUCTION):
         self.tokenizer = processor.tokenizer
         self.max_length = max_length
         self.max_summary_tokens = max_summary_tokens
+        self.instruction = instruction
 
     def __call__(self, features: list[dict[str, str]]) -> dict[str, torch.Tensor]:
         tok = self.tokenizer
         eos_id = tok.eos_token_id
         pad_id = tok.pad_token_id if tok.pad_token_id is not None else eos_id
 
-        head_ids = tok(f"USER: {INSTRUCTION}", add_special_tokens=True).input_ids
+        head_ids = tok(f"USER: {self.instruction}", add_special_tokens=True).input_ids
         suffix_ids = tok(" ASSISTANT: ", add_special_tokens=False).input_ids
 
         input_ids_list: list[list[int]] = []
@@ -275,6 +279,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--eval-strategy", choices=["epoch", "steps"], default="epoch", help="Evaluation schedule")
     parser.add_argument("--eval-steps", type=int, default=250, help="Eval interval when --eval-strategy steps")
     parser.add_argument("--resume-from-checkpoint", default="", help="Checkpoint path to resume from, or 'last' for newest checkpoint in output dir")
+    parser.add_argument("--instruction", default=DEFAULT_INSTRUCTION, help="Instruction prefix prepended to every example (must match generation, see generate_llava15_lora.py --instruction)")
     return parser.parse_args()
 
 
@@ -594,7 +599,7 @@ def main() -> int:
 
     train_ds = JsonlDataset(train_records)
     val_ds = JsonlDataset(val_records)
-    collator = LlavaCollator(processor=processor, max_length=args.max_length)
+    collator = LlavaCollator(processor=processor, max_length=args.max_length, instruction=args.instruction)
 
     resume_checkpoint: str | None = None
     total_epochs = args.num_epochs
@@ -689,6 +694,7 @@ def main() -> int:
         "dataset_jsonl": str(data_path),
         "output_dir": str(output_dir),
         "num_epochs": total_epochs,
+        "instruction": args.instruction,
         "train_metrics": train_metrics,
         "eval_metrics": eval_metrics,
     }

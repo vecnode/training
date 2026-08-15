@@ -17,8 +17,12 @@ import torch
 from peft import PeftModel
 from transformers import AutoProcessor, LlavaForConditionalGeneration
 
-# Must match the INSTRUCTION used in train_llava15_lora.py.
-INSTRUCTION = (
+# Must match the --instruction used for the adapter's training run
+# (train_llava15_lora.py's DEFAULT_INSTRUCTION, or whatever was passed
+# explicitly - e.g. build_llava15_dataset.py's CNN_DAILYMAIL_PROMPT_INSTRUCTION
+# for a CNN/DailyMail-trained adapter). Override with --instruction if the
+# adapter wasn't trained with this default.
+DEFAULT_INSTRUCTION = (
     "Summarize this scanned document page in one concise paragraph. "
     "Focus on key entities, dates, events, and any UAP-related content if present.\n\n"
     "OCR text:\n"
@@ -47,6 +51,7 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument("--max-length", type=int, default=2048, help="Max input token budget (must match training)")
     parser.add_argument("--max-new-tokens", type=int, default=220, help="Max generated tokens per sample")
+    parser.add_argument("--instruction", default=DEFAULT_INSTRUCTION, help="Instruction prefix (must match the adapter's training --instruction)")
     return parser.parse_args()
 
 
@@ -131,7 +136,7 @@ def token_f1(pred: str, ref: str) -> float:
 class Summarizer:
     """Loads the base model + LoRA adapter and turns OCR text into a summary."""
 
-    def __init__(self, adapter_dir: Path, base_model_id: str, max_length: int, max_new_tokens: int):
+    def __init__(self, adapter_dir: Path, base_model_id: str, max_length: int, max_new_tokens: int, instruction: str = DEFAULT_INSTRUCTION):
         self.max_length = max_length
         self.max_new_tokens = max_new_tokens
 
@@ -147,7 +152,7 @@ class Summarizer:
         self.model.eval()
 
         # Precompute the fixed wrapper so only the OCR body is re-tokenized per call.
-        self.head_ids = self.tokenizer(f"USER: {INSTRUCTION}", add_special_tokens=True).input_ids
+        self.head_ids = self.tokenizer(f"USER: {instruction}", add_special_tokens=True).input_ids
         self.suffix_ids = self.tokenizer(" ASSISTANT: ", add_special_tokens=False).input_ids
 
     def build_input_ids(self, ocr_text: str) -> list[int]:
@@ -297,6 +302,7 @@ def main() -> int:
         base_model_id=base_model_id,
         max_length=args.max_length,
         max_new_tokens=args.max_new_tokens,
+        instruction=args.instruction,
     )
 
     if raw_text:

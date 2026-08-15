@@ -1,17 +1,75 @@
 # LLaVA 1.5 7B LoRA training (text-only OCR → summary)
 
 Model: `llava-hf/llava-1.5-7b-hf` (LoRA on the language backbone)
-Data: OCR text + reference summaries from the [pre-training](https://github.com/vecnode/pre-training)
-repo's `outputs/[timestamp]_[dataset]/[timestamp]_[dataset]-OCR.csv` /
-`-SUMMARIES.csv` — this repo does not run OCR or generate summaries itself,
-it only trains on CSVs produced elsewhere.
-All downloads, cache, checkpoints, and adapters stay inside this folder.
+Data: source-text + reference-summary pairs, either OCR text from the
+[pre-training](https://github.com/vecnode/pre-training) repo's
+`outputs/[timestamp]_[dataset]/[timestamp]_[dataset]-OCR.csv` / `-SUMMARIES.csv`,
+or — see below — a local CNN/DailyMail parquet dump. This repo does not run
+OCR, generate summaries, or download CNN/DailyMail itself; it only trains on
+data produced/downloaded elsewhere. All downloads, cache, checkpoints, and
+adapters stay inside this folder.
 
-**Task:** given the raw OCR text of a page, produce a new one-paragraph summary.
-The page image is **not** used — the OCR text already carries the signal, so we
+**Task:** given a page/article's raw text, produce a new one-paragraph summary.
+The page image is **not** used — the text already carries the signal, so we
 train the LLaVA language model as a pure text model. Loss is computed only on the
-summary, and long OCR is truncated by tokens (head + tail) so the summary is
+summary, and long input is truncated by tokens (head + tail) so the summary is
 always preserved in the training budget.
+
+## CNN/DailyMail source (current focus)
+
+Current work: training this pipeline against
+[`abisee/cnn_dailymail`](https://huggingface.co/datasets/abisee/cnn_dailymail)
+(config `3.0.0`) instead of the pre-training repo's OCR CSVs, as a public,
+no-setup-required stand-in dataset. `axolotl-ocr-summary/` is untouched by
+this — it already accepts CNN/DailyMail via `--text-col article --summary-col
+highlights` on its own CSV-based prep script.
+
+**Where the dataset lives:** downloaded locally to
+`C:\Users\luisarandas\Desktop\cnn_dailymail\3.0.0\` (outside this repo, and
+outside the root folder — not committed, not moved). Point `--cnn-dailymail-dir`
+at wherever you keep it; nothing in this pipeline assumes a fixed location.
+
+**Dataset format.** Hugging Face ships CNN/DailyMail as Parquet, split into
+train/validation/test shards:
+
+```
+cnn_dailymail/3.0.0/
+├── train-00000-of-00003.parquet   \
+├── train-00001-of-00003.parquet    } 287,113 rows total, ~772 MB
+├── train-00002-of-00003.parquet   /
+├── validation-00000-of-00001.parquet   13,368 rows, ~35 MB
+└── test-00000-of-00001.parquet         11,490 rows, ~30 MB
+```
+
+Total: **311,971 rows, ~799 MB on disk** (compressed Parquet; measured against
+the files in the path above). Three columns per row:
+
+| Column | Type | What it is | Typical length |
+|---|---|---|---|
+| `article` | string | Full news article body | ~3,950 chars avg (106–12,027 range) |
+| `highlights` | string | Human-written multi-sentence summary (the training target) | ~260 chars avg (34–1,123 range) |
+| `id` | string | SHA1 hash of the source URL | — |
+
+`build_llava15_dataset.py --cnn-dailymail-dir <dir>` maps this straight onto
+the existing JSONL contract the trainer already reads:
+`article -> ocr_text`, `highlights -> summary`. The `ocr_text` field name is
+kept as-is for pipeline compatibility even though this source isn't OCR
+output — each record also carries `"source": "cnn_dailymail"` and the
+original `id` so it's traceable back to the source row.
+
+Because this is clean article text rather than noisy scanned OCR, training
+uses a different instruction wrapper
+(`CNN_DAILYMAIL_PROMPT_INSTRUCTION` in `build_llava15_dataset.py`, "Summarize
+this news article..." instead of "Summarize this scanned document page...
+UAP-related content") — pass it explicitly via `train_llava15_lora.py
+--instruction` (see step 3 below) since the trainer's default instruction is
+still tuned for the OCR use case.
+
+**Size guidance for a single RTX 3090 (24GB):** the full 287k-row train split
+is far more than a LoRA on 2 attention projections needs and would take many
+hours per epoch. Start with `--max-samples` in the low thousands (e.g.
+1,000–5,000) for a real training run, or 256 for the smoke test in step 3 —
+scale up only if loss/eval curves justify it.
 
 ### 1) Install deps (once)
 
@@ -19,26 +77,49 @@ always preserved in the training budget.
 uv_setup.bat
 ```
 
-This installs project dependencies (including `transformers`, `peft`, `accelerate`, `sentencepiece`) through `uv sync`.
+This installs project dependencies (including `transformers`, `peft`,
+`accelerate`, `sentencepiece`, `pandas`, `pyarrow`) through `uv sync`.
 
 ### 2) Build JSONL dataset
 
-Point `--ocr-csv` / `--summaries-csv` at the pre-training repo's per-run
-output files (the OCR CSV's `full_path` column is already absolute, so no
-`--root` juggling is needed):
+**CNN/DailyMail** (current focus) — point `--cnn-dailymail-dir` at the local
+Parquet folder, cap rows with `--max-samples` (recommended, see sizing above):
+
+```bash
+.venv\Scripts\python.exe build_llava15_dataset.py --cnn-dailymail-dir "C:\Users\luisarandas\Desktop\cnn_dailymail\3.0.0" --cnn-dailymail-split train --max-samples 2000
+```
+
+or from the repo root without activating the venv:
+
+```bash
+uv run --directory fine-tuning/llava15-lora python build_llava15_dataset.py --cnn-dailymail-dir "C:\Users\luisarandas\Desktop\cnn_dailymail\3.0.0" --cnn-dailymail-split train --max-samples 2000
+```
+
+**Pre-training OCR CSVs** (original source, still supported) — point
+`--ocr-csv` / `--summaries-csv` at the pre-training repo's per-run output
+files (the OCR CSV's `full_path` column is already absolute, so no `--root`
+juggling is needed):
 
 ```bash
 .venv\Scripts\python.exe build_llava15_dataset.py --ocr-csv "C:\path\to\pre-training\outputs\[timestamp]_[dataset]\[timestamp]_[dataset]-OCR.csv" --summaries-csv "C:\path\to\pre-training\outputs\[timestamp]_[dataset]\[timestamp]_[dataset]-SUMMARIES.csv"
 ```
 
-Output: `data/llava15_train.jsonl`. Training consumes the `ocr_text` and
-`summary` fields (the `image_path`/`prompt` fields are kept for reference but are
-ignored by the text-only trainer).
+Either way, output is `data/llava15_train.jsonl`. Training consumes the
+`ocr_text` and `summary` fields (`image_path`/`prompt`/`source`/`id` are kept
+for reference but are ignored by the text-only trainer).
 
 ### 3) Smoke test (must pass before a full run)
 
 ```bash
 .venv\Scripts\python.exe train_llava15_lora.py --max-samples 256 --num-epochs 1
+```
+
+When training on CNN/DailyMail, add `--instruction` so the wrapper matches
+the news-article prompt used to build the JSONL (`generate_llava15_lora.py`
+needs the same `--instruction` later, at inference):
+
+```bash
+.venv\Scripts\python.exe train_llava15_lora.py --max-samples 256 --num-epochs 1 --instruction "Summarize this news article in one concise paragraph. Focus on key entities, dates, and events.\n\nArticle text:\n"
 ```
 
 Expected: train loss decreases and `eval_loss` is numeric (not `nan`).
