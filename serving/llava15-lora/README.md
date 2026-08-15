@@ -7,7 +7,7 @@ configured — see below), see the reference summary each page was trained
 against, and run the adapter live to compare all three side by side.
 
 ```
-deploy/llava15-lora/
+serving/llava15-lora/
 ├─ app.py             FastAPI service: web UI + JSON API (loads model + dataset once)
 ├─ dataset.py         Loads & joins OCR + SUMMARIES CSVs into training pairs
 ├─ infer.py           Core Summarizer (importable) + CLI + weight introspection
@@ -16,9 +16,9 @@ deploy/llava15-lora/
 └─ static/index.html  Front-end: dataset browser + 3-way comparison
 ```
 
-This folder is deliberately separate from `../../llava15-lora/` (the training
-code) — each pipeline this repo trains gets its own `deploy/<pipeline>/`
-folder, independently deployable with its own dependencies.
+This folder is deliberately separate from `../../fine-tuning/llava15-lora/`
+(the training code) — each pipeline this repo trains gets its own
+`serving/<pipeline>/` folder, independently deployable with its own dependencies.
 
 ### The interface
 
@@ -43,19 +43,19 @@ flowchart LR
 
 ## Prerequisites
 
-1. **Install deps** (own local venv, separate from `../../llava15-lora/`'s):
+1. **Install deps** (own local venv, separate from `../../fine-tuning/llava15-lora/`'s):
    ```bash
    uv_setup.bat
    ```
 2. **A trained artifact**, one of:
-   - the LoRA adapter at `../../llava15-lora/runs/llava15_lora/final_adapter` (default), or
+   - the LoRA adapter at `../../fine-tuning/llava15-lora/runs/llava15_lora/final_adapter` (default), or
    - a fused model at `merged_model/` in this folder (recommended for production — see below).
-   ⚠️ `../../llava15-lora/runs/` is **gitignored**, so the adapter does not ship with
+   ⚠️ `../../fine-tuning/llava15-lora/runs/` is **gitignored**, so the adapter does not ship with
    the repo. Copy `final_adapter/` (~20 MB) along when deploying elsewhere.
 3. **Base model** `llava-hf/llava-1.5-7b-hf` (~14 GB, public on Hugging Face
    Hub — not something you trained). In adapter mode, `infer.py` explicitly
    fetches it via `huggingface_hub.snapshot_download` into
-   `../../llava15-lora/hf_cache` (git-ignored) the first time the server
+   `../../fine-tuning/llava15-lora/hf_cache` (git-ignored) the first time the server
    starts, with progress logged to the console; later runs are a fast cache
    check, no re-download. Not needed for a fused model (baked in). Requires
    internet access and ~14 GB free disk on first run.
@@ -170,5 +170,5 @@ Build the `Summarizer` once and reuse it — loading is the slow part.
   the pre-training pipeline's summarization step, so this model reproduces that
   style — spot-check important outputs for faithfulness.
 - **Keep inference matched to training:** `INSTRUCTION`, `max_length=2048`, and the
-  head+tail truncation in `infer.py` mirror the trainer (`../../llava15-lora/train_llava15_lora.py`);
+  head+tail truncation in `infer.py` mirror the trainer (`../../fine-tuning/llava15-lora/train_llava15_lora.py`);
   changing them hurts quality.

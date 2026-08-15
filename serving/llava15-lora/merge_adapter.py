@@ -22,8 +22,8 @@ import os
 from pathlib import Path
 
 _DEPLOY_DIR = Path(__file__).resolve().parent
-# fine-tuning/deploy/llava15-lora/ -> fine-tuning/ -> fine-tuning/llava15-lora/
-_TRAINING_DIR = _DEPLOY_DIR.parent.parent / "llava15-lora"
+# serving/llava15-lora/ -> repo root -> fine-tuning/llava15-lora/
+_TRAINING_DIR = _DEPLOY_DIR.parent.parent / "fine-tuning" / "llava15-lora"
 os.environ.setdefault("HF_HOME", str(_TRAINING_DIR / "hf_cache"))
 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 

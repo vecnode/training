@@ -204,4 +204,4 @@ Track `avg_token_f1` across epochs as a quick quantitative trend, and skim
 ## Serving
 
 Once trained, serve the adapter with the FastAPI server in
-[`../deploy/llava15-lora/`](../deploy/llava15-lora/README.md).
+[`../../serving/llava15-lora/`](../../serving/llava15-lora/README.md).

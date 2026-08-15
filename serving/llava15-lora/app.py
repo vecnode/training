@@ -6,7 +6,7 @@ serialized with a lock so concurrent requests are safe.
 
 By default it loads a fused/merged model from merged_model/ if present
 (recommended for production - see merge_adapter.py), otherwise it falls back to
-the LoRA adapter at ../../llava15-lora/runs/llava15_lora/final_adapter.
+the LoRA adapter at ../../fine-tuning/llava15-lora/runs/llava15_lora/final_adapter.
 
 Run (from this folder):
 
