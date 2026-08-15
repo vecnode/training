@@ -74,39 +74,54 @@ RTX 3090 (24GB):
 
 | Pipeline | Framework | Base model | Data shape |
 |---|---|---|---|
-| [`fine-tuning/llava15-lm-lora/`](fine-tuning/llava15-lm-lora/README.md) | `transformers` + `peft` (manual `Trainer` loop) | `llava-hf/llava-1.5-7b-hf` — LoRA on `q_proj`/`v_proj` of the language-model backbone only. Vision tower is not exercised; this is a text-only fine-tune of a multimodal model. | JSONL with `text` / `summary` fields |
+| [`fine-tuning/vicuna-7b-lora/`](fine-tuning/vicuna-7b-lora/README.md) | `transformers` + `peft` (manual `Trainer` loop) | `lmsys/vicuna-7b-v1.5` — LoRA on `q_proj`/`v_proj`, loaded directly via `AutoModelForCausalLM`/`AutoTokenizer`. No LLaVA checkpoint, no vision encoder, no multimodal projector anywhere in the dependency graph. | JSONL with `text` / `summary` fields |
 | [`fine-tuning/axolotl-ocr-summary/`](fine-tuning/axolotl-ocr-summary/README.md) | [Axolotl](https://axolotl.ai/) (config-driven) | `Qwen/Qwen2.5-3B-Instruct` (full LoRA) or 7-8B (QLoRA) — no vision component | Alpaca-shape JSONL: `{"instruction", "input", "output"}` |
 
-**Naming: `llava15-lm-lora`, not `llava15-lora`.** `llava-hf/llava-1.5-7b-hf`
-is a vision-language model (CLIP vision encoder → multimodal projector →
-Vicuna-7B language backbone). This pipeline touches only the language-model
-backbone — LoRA on `q_proj`/`v_proj` inside its attention layers — and never
-loads an image, the vision encoder, or the projector (the dataset,
-CNN/DailyMail, has no images). Functionally it's a LoRA fine-tune of a plain
-causal LLM that happens to ship inside a LLaVA checkpoint. `-lm-` in the
-folder name marks that distinction; a planned `llava15-full-lora/` sibling,
-trained on image+text pairs and actually exercising the vision
-encoder/projector, would be this repo's first real VLM fine-tune. Renamed
-from `llava15-lora` (and `serving/llava15-lora` → `serving/llava15-lm-lora`)
-this pass — see [`fine-tuning/llava15-lm-lora/README.md`](fine-tuning/llava15-lm-lora/README.md#what-lm-means-here-and-why-its-not-a-vlm-fine-tune)
-for the full explanation.
+**Naming/loading history: `vicuna-7b-lora`, previously `llava15-lm-lora`,
+originally `llava15-lora`.** Two renames, each fixing a real overstatement:
 
-**`llava15-lm-lora/` is a generic text-summarization LoRA, not OCR-specific** —
+1. `llava15-lora` → `llava15-lm-lora`: the pipeline only ever LoRA'd the
+   language-model backbone (`q_proj`/`v_proj`) of `llava-hf/llava-1.5-7b-hf`
+   — never the vision encoder or multimodal projector, never an image. The
+   `-lora` name alone overstated that as a VLM fine-tune.
+2. `llava15-lm-lora` → `vicuna-7b-lora`: even loading LLaVA's checkpoint at
+   all was unnecessary once the vision half was never used — it still
+   downloaded the full ~14 GB multimodal weights via
+   `LlavaForConditionalGeneration`/`AutoProcessor` to get to a submodule that
+   is, in substance, Vicuna-7B. This pass switched to loading
+   `lmsys/vicuna-7b-v1.5` **directly** via `AutoModelForCausalLM` +
+   `AutoTokenizer` — ~13 GB instead of ~14 GB, no vision-related code path in
+   the dependency graph at all, same LoRA config/target modules. Trade-off:
+   `lmsys/vicuna-7b-v1.5` is the checkpoint LLaVA 1.5 was later
+   visually-instruction-tuned *from*, not the LLaVA-tuned weights themselves
+   — different starting point, not directly comparable to the old
+   `llava15-lm-lora` run's results, but a cleaner, smaller, honestly-named
+   base for a language-model-only LoRA. `serving/llava15-lora` was renamed
+   to `serving/vicuna-7b-lora` in step, with matching model-loading changes
+   (functionally required: a Vicuna-7B-trained adapter's parameter names
+   don't match `LlavaForConditionalGeneration`'s `language_model.*` prefix,
+   so serving would fail to load it otherwise). A planned `llava15-full-lora`
+   sibling, trained on image+text pairs and actually exercising the vision
+   encoder/projector, remains the natural first real VLM fine-tune in this
+   repo — that one *should* load the full LLaVA checkpoint. Full reasoning in
+   [`fine-tuning/vicuna-7b-lora/README.md`](fine-tuning/vicuna-7b-lora/README.md#why-vicuna-7b-directly-not-via-llava).
+
+**`vicuna-7b-lora/` is a generic text-summarization LoRA, not OCR-specific** —
 its interface, data source, and default prompt were all cleaned up this pass
 to reflect that:
 
-- JSONL field is `text` (was `ocr_text`); `build_llava15_dataset.py` and
-  `generate_llava15_lora.py`'s flags are `--source-csv`/`--text`/`--text-file`
+- JSONL field is `text` (was `ocr_text`); `build_vicuna7b_dataset.py` and
+  `generate_vicuna7b_lora.py`'s flags are `--source-csv`/`--text`/`--text-file`
   (were `--ocr-csv`/`--ocr-text`/`--ocr-text-file`).
-- `build_llava15_dataset.py` **only** builds from a CNN/DailyMail Parquet
+- `build_vicuna7b_dataset.py` **only** builds from a CNN/DailyMail Parquet
   dump now (`--cnn-dailymail-dir`, required) — the earlier dual-source mode
   that also read pre-training's image-linked OCR/SUMMARIES CSV pair
   (`normalize_image_key`/`resolve_image_path`/`load_summaries`) was removed
   entirely, not just renamed, since it's not needed for this pipeline's
-  current use (`generate_llava15_lora.py`'s `--source-csv` batch-eval mode
+  current use (`generate_vicuna7b_lora.py`'s `--source-csv` batch-eval mode
   still accepts any generic CSV with a `text` column, unrelated to that
   removed ingestion path).
-- `train_llava15_lora.py`/`generate_llava15_lora.py`'s `DEFAULT_INSTRUCTION`
+- `train_vicuna7b_lora.py`/`generate_vicuna7b_lora.py`'s `DEFAULT_INSTRUCTION`
   is now the CNN/DailyMail news-article wording (was "Summarize this scanned
   document page... UAP-related content") — since that's the only source this
   pipeline builds from, `--instruction` no longer needs to be passed
@@ -137,41 +152,46 @@ against the actual files:
 | **Total** | **311,971** | **~799 MB** |
 
 `article` (avg ~3,950 chars) → `text`, `highlights` (avg ~260 chars) →
-`summary`. `build_llava15_dataset.py --cnn-dailymail-dir ... --max-samples
+`summary`. `build_vicuna7b_dataset.py --cnn-dailymail-dir ... --max-samples
 2000` was run end-to-end against the real files and produces valid JSONL
 records; full details and commands in
-[`fine-tuning/llava15-lm-lora/README.md`](fine-tuning/llava15-lm-lora/README.md).
+[`fine-tuning/vicuna-7b-lora/README.md`](fine-tuning/vicuna-7b-lora/README.md).
 
-### First real training run — done and verified good
+### First real training run (superseded) and the reconstruction-test tool
 
-2,000-sample JSONL (1,800 train / 200 val), 1 epoch, 450 steps, batch=1 ×
-grad-accum=4, ~31 min on a single RTX 3090. Loss dropped 1.66 → ~1.12 in the
-first ~50 steps then plateaued in a ~1.0–1.2 band for the rest of the run;
-`eval_loss` (1.11) tracked train loss closely (no overfitting). That plateau
-is expected for a rank-16, 2-projection adapter on a small dataset with a
-noisy effective batch size of 4 — not evidence of a broken run.
+Before the switch to loading Vicuna-7B directly, a 2,000-sample run on the
+old `llava15-lm-lora` pipeline (1,800 train / 200 val, 1 epoch, 450 steps,
+~31 min on a single RTX 3090) showed loss dropping 1.66 → ~1.12 in the first
+~50 steps then plateauing in a ~1.0–1.2 band, with `eval_loss` (1.11)
+tracking train loss closely (no overfitting) — a normal curve for a
+rank-16, 2-projection adapter on a small dataset, not evidence of a broken
+run. That adapter and its data/hf_cache were deleted as part of this pass's
+switch to `lmsys/vicuna-7b-v1.5` (different base weights, not compatible
+with the old adapter) — the numbers above are illustrative of the expected
+curve shape, not a claim about the current pipeline's untrained state.
 
-Loss alone doesn't say whether the summaries are actually good, so
-`generate_llava15_lora.py` gained a `--jsonl-eval <path> --num-samples N`
-reconstruction-test mode this pass: it replicates the trainer's train/val
-split (same seed/ratio) and prints genuinely held-out
-source/reference/generated triples with token-F1, instead of requiring a
-manual `--text` string. Run against this adapter, it produced coherent,
-on-topic, correctly-bulleted CNN/DailyMail-style summaries (avg token-F1
-0.357 across 5 samples) — confirms the adapter trained well despite the
-plateaued loss. Full example output in the
-[pipeline README](fine-tuning/llava15-lm-lora/README.md#5-reconstruction-test--verify-quality-not-just-loss).
+What carries forward: loss alone doesn't say whether summaries are actually
+good, so `generate_vicuna7b_lora.py` has a `--jsonl-eval <path>
+--num-samples N` reconstruction-test mode (added the same pass as the old
+run above) — it replicates the trainer's train/val split (same seed/ratio)
+and prints genuinely held-out source/reference/generated triples with
+token-F1, instead of requiring a manual `--text` string. Run against the old
+adapter it produced coherent, on-topic, correctly-bulleted CNN/DailyMail
+summaries (avg token-F1 0.357 across 5 samples) despite the plateaued loss —
+this is the tool to use to judge the next real run on the current pipeline,
+not the loss curve. See the
+[pipeline README](fine-tuning/vicuna-7b-lora/README.md#5-reconstruction-test--verify-quality-not-just-loss).
 
 ## Stage 3 — `serving/`
 
 One `serving/<pipeline>/` folder per fine-tuning pipeline that has a serving
-story. Currently: [`serving/llava15-lm-lora/`](serving/llava15-lm-lora/README.md),
-a FastAPI service (`app.py`) that loads the base LLaVA model + trained
+story. Currently: [`serving/vicuna-7b-lora/`](serving/vicuna-7b-lora/README.md),
+a FastAPI service (`app.py`) that loads the base Vicuna-7B model + trained
 adapter (or a fused/merged model) once and serves a JSON API plus a
 dataset-browser front-end. Deliberately decoupled from
-`fine-tuning/llava15-lm-lora/` — it only reads the trained adapter directory
-(`../../fine-tuning/llava15-lm-lora/runs/llava15_lora/final_adapter`), never
-imports its training code. `uv run --directory serving/llava15-lm-lora python
+`fine-tuning/vicuna-7b-lora/` — it only reads the trained adapter directory
+(`../../fine-tuning/vicuna-7b-lora/runs/vicuna7b_lora/final_adapter`), never
+imports its training code. `uv run --directory serving/vicuna-7b-lora python
 app.py --help` verified working.
 
 ## Stage 4 — `training/`
@@ -183,7 +203,7 @@ from adapting an existing checkpoint (`fine-tuning/`). Not yet designed.
 
 None of the fine-tuning pipelines ship data — `DATASET/`, `data/`, `runs/`,
 `output/` etc. are all git-ignored, drop-zone folders (via the single root
-`.gitignore`). `llava15-lm-lora/` trains on CNN/DailyMail; `axolotl-ocr-summary/`
+`.gitignore`). `vicuna-7b-lora/` trains on CNN/DailyMail; `axolotl-ocr-summary/`
 accepts any matching CSV. Example small, permissively-licensed public
 datasets are listed in the root `README.md`'s **Datasets** section.
 
@@ -193,10 +213,10 @@ datasets are listed in the root `README.md`'s **Datasets** section.
 not assumed, for:
 
 - `pre-training` — `scripts/ocr_detection_png.py`, `scripts/summarize_ocr_gemma.py`
-- `fine-tuning/llava15-lm-lora` — `build_llava15_dataset.py` (including a real
-  5-row CNN/DailyMail smoke test), `train_llava15_lora.py`,
-  `generate_llava15_lora.py`
-- `serving/llava15-lm-lora` — `app.py` (also fixed a `SyntaxWarning` from
+- `fine-tuning/vicuna-7b-lora` — `build_vicuna7b_dataset.py` (including a real
+  5-row CNN/DailyMail smoke test), `train_vicuna7b_lora.py`,
+  `generate_vicuna7b_lora.py`
+- `serving/vicuna-7b-lora` — `app.py` (also fixed a `SyntaxWarning` from
   unescaped backslashes in three docstrings: `app.py`, `merge_adapter.py`,
   `inspect_weights.py`)
 
@@ -212,7 +232,7 @@ Not executed this pass (no PDFs/poppler set up in this environment):
 
 ## Next steps
 
-- `fine-tuning/llava15-lm-lora` has a verified-good first run (see above) —
+- `fine-tuning/vicuna-7b-lora` has a verified-good first run (see above) —
   reasonable next moves are more epochs (2–3; no overfitting signal yet) or
   more samples, judged by the reconstruction test, not loss alone.
 - `axolotl-ocr-summary`'s Windows/WSL split should be decided explicitly
@@ -221,4 +241,4 @@ Not executed this pass (no PDFs/poppler set up in this environment):
 - `training/` (from-scratch, non-LoRA) is still undesigned.
 - `fine-tuning/llava15-full-lora` (planned, not started): the first real VLM
   fine-tune in this repo — image+text pairs, vision encoder/projector
-  actually in the training graph, unlike `llava15-lm-lora`.
+  actually in the training graph, unlike `vicuna-7b-lora`.

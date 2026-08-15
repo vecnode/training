@@ -19,19 +19,28 @@ root covers the whole repo; subfolders don't get their own.
   wheels yet for some pinned deps like `pillow`, which breaks `uv run` with a
   source-build failure) and its own CUDA torch build; never introduce a
   shared root Python environment.
-- **`fine-tuning/llava15-lm-lora/`** trains a LoRA adapter on
-  `llava-hf/llava-1.5-7b-hf`'s language backbone only (vision tower unused) —
-  it's a generic text-summarization fine-tune, not OCR-specific. It builds
+- **`fine-tuning/vicuna-7b-lora/`** trains a LoRA adapter on plain
+  `lmsys/vicuna-7b-v1.5`, loaded directly via `AutoModelForCausalLM`/
+  `AutoTokenizer` — not a LLaVA checkpoint, not `LlavaForConditionalGeneration`/
+  `AutoProcessor`. Previously named `llava15-lm-lora` (loaded the full ~14 GB
+  `llava-hf/llava-1.5-7b-hf` checkpoint and only LoRA'd its language
+  submodule) and before that `llava15-lora`; both names overstated what was
+  happening. `protobuf` is a required dependency specifically because
+  `lmsys/vicuna-7b-v1.5` ships a raw SentencePiece tokenizer that needs it to
+  convert to a fast tokenizer — omitting it breaks `AutoTokenizer.from_pretrained`.
+  It's a generic text-summarization fine-tune, not OCR-specific. It builds
   its JSONL from a local CNN/DailyMail Parquet dump only
-  (`build_llava15_dataset.py --cnn-dailymail-dir`, required) — the earlier
+  (`build_vicuna7b_dataset.py --cnn-dailymail-dir`, required) — an earlier
   mode that also read pre-training's image-linked OCR/SUMMARIES CSV pair was
   removed entirely, not just renamed. CLI flags and the JSONL field are named
   generically (`--source-csv`, `--text`, `--text-file`, JSONL field `text`)
   rather than `ocr_*`, on purpose — don't reintroduce `ocr_*` naming or bring
   back the removed CSV-pair ingestion path without being asked. The default
-  `--instruction` now matches the CNN/DailyMail prompt, so it doesn't need to
+  `--instruction` matches the CNN/DailyMail prompt, so it doesn't need to
   be passed explicitly for the common case; it's still overridable (both
-  trainer and generator, must match between the two) for other wording.
+  trainer and generator, must match between the two) for other wording. A
+  planned `llava15-full-lora` sibling (image+text pairs) is where a real
+  LLaVA/vision dependency belongs in this repo — not here.
 - **`fine-tuning/axolotl-ocr-summary/`** currently only resolves its `uv`
   environment on Linux/WSL — `axolotl[deepspeed]` pulls in `triton`, which
   has no Windows wheels. Don't try to "fix" this by editing that project's

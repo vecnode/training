@@ -50,8 +50,8 @@ patch around — flag it rather than reworking that project's pins unprompted.
   are versioned. Datasets are downloaded/pointed-to locally, never checked
   in. Likewise: one root `AGENTS.md`/`CLAUDE.md` pair for the whole repo,
   not one per pipeline folder.
-- **`fine-tuning/llava15-lm-lora/` builds its JSONL from CNN/DailyMail only**
-  (`build_llava15_dataset.py --cnn-dailymail-dir`, required) — the earlier
+- **`fine-tuning/vicuna-7b-lora/` builds its JSONL from CNN/DailyMail only**
+  (`build_vicuna7b_dataset.py --cnn-dailymail-dir`, required) — the earlier
   dual-source mode that also read pre-training's image-linked OCR/SUMMARIES
   CSV pair was removed entirely (not renamed) since it isn't needed for this
   pipeline's current use. Its CLI flags and JSONL field are named
@@ -63,20 +63,26 @@ patch around — flag it rather than reworking that project's pins unprompted.
   explicitly for the common case; it's still a CLI flag (on both the trainer
   and generator, must match between the two) for training on
   differently-worded source text.
-- **Judge a trained `llava15-lm-lora` adapter by `generate_llava15_lora.py
-  --jsonl-eval data/llava15_train.jsonl --num-samples N`, not loss alone.**
+- **Judge a trained `vicuna-7b-lora` adapter by `generate_vicuna7b_lora.py
+  --jsonl-eval data/vicuna7b_train.jsonl --num-samples N`, not loss alone.**
   It replicates the trainer's held-out split and prints source/reference/
   generated triples with token-F1 — loss can plateau while the model is
-  still producing good summaries (verified: a run with a flat ~1.0–1.2 loss
-  plateau still produced coherent, on-topic, correctly-styled summaries).
-  `llava15-lm-lora` is LM-only (LoRA on the language backbone, no images,
-  no vision encoder in the graph) — a planned `llava15-full-lora` sibling
-  would be this repo's first real VLM fine-tune, on image+text pairs.
+  still producing good summaries (verified on a predecessor run: a flat
+  ~1.0–1.2 loss plateau still produced coherent, on-topic, correctly-styled
+  summaries).
+- **`vicuna-7b-lora` loads `lmsys/vicuna-7b-v1.5` directly** via
+  `AutoModelForCausalLM`/`AutoTokenizer` — not a LLaVA checkpoint, not
+  `LlavaForConditionalGeneration`/`AutoProcessor`. Don't reintroduce a LLaVA
+  dependency here; a planned `llava15-full-lora` sibling (image+text pairs,
+  actually exercising the vision encoder/projector) is where that belongs —
+  this repo's first real VLM fine-tune. `protobuf` is a required dependency
+  in this pipeline specifically because `lmsys/vicuna-7b-v1.5` ships a raw
+  SentencePiece tokenizer that needs it to convert to a fast tokenizer.
 - **`axolotl-ocr-summary/`'s data contract is unrelated and untouched** —
   it consumes any CSV via `--input --text-col --summary-col`.
 - **Cross-folder references use full relative paths from repo root**, e.g.
-  `serving/llava15-lm-lora/` reaches its training counterpart via
-  `../../fine-tuning/llava15-lm-lora/`. When moving or renaming a pipeline
+  `serving/vicuna-7b-lora/` reaches its training counterpart via
+  `../../fine-tuning/vicuna-7b-lora/`. When moving or renaming a pipeline
   folder, grep the whole repo for its old path (READMEs and code comments,
   not just imports — these pipelines don't import each other's code, but do
   reference each other's paths for the adapter/cache directories) before

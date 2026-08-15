@@ -5,7 +5,14 @@ import csv
 import json
 import os
 import random
+import sys
 from pathlib import Path
+
+# Generated text can contain characters outside the Windows console's default
+# cp1252 codepage (curly quotes, em dashes, etc.) - without this, printing
+# such a summary crashes with UnicodeEncodeError instead of just printing it.
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 # Keep all Hugging Face artifacts inside training/
 _TRAINING_DIR = Path(__file__).resolve().parent
@@ -16,10 +23,10 @@ os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 
 import torch
 from peft import PeftModel
-from transformers import AutoProcessor, LlavaForConditionalGeneration
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # Must match the --instruction used for the adapter's training run
-# (train_llava15_lora.py's DEFAULT_INSTRUCTION). Override with --instruction
+# (train_vicuna7b_lora.py's DEFAULT_INSTRUCTION). Override with --instruction
 # if the adapter was trained with a different one.
 DEFAULT_INSTRUCTION = (
     "Summarize this news article in one concise paragraph. "
@@ -33,8 +40,8 @@ PAGE_DELIM = "===PAGEBREAK==="
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate summaries from source text with a trained LLaVA LoRA adapter (text-only)")
-    parser.add_argument("--adapter-dir", type=Path, default=_TRAINING_DIR / "runs" / "llava15_lora" / "final_adapter", help="Path to trained LoRA adapter directory")
+    parser = argparse.ArgumentParser(description="Generate summaries from source text with a trained Vicuna-7B LoRA adapter")
+    parser.add_argument("--adapter-dir", type=Path, default=_TRAINING_DIR / "runs" / "vicuna7b_lora" / "final_adapter", help="Path to trained LoRA adapter directory")
     parser.add_argument("--model-id", default="", help="Base model id (auto-detected from adapter config when omitted)")
 
     # Single raw-text mode (paste new text and get one summary):
@@ -44,15 +51,15 @@ def parse_args() -> argparse.Namespace:
     # Batch CSV mode:
     parser.add_argument("--source-csv", type=Path, default=None, help="Source-text CSV input with 'text' (and optional 'image'/'status') columns")
     parser.add_argument("--reference-csv", type=Path, default=None, help="Optional reference summaries CSV for token-F1 (e.g., ../output/Release_1_SUMMARIES.csv)")
-    parser.add_argument("--out-csv", type=Path, default=_TRAINING_DIR / "runs" / "llava15_lora" / "generated.csv", help="Output CSV with generated predictions (CSV mode)")
+    parser.add_argument("--out-csv", type=Path, default=_TRAINING_DIR / "runs" / "vicuna7b_lora" / "generated.csv", help="Output CSV with generated predictions (CSV mode)")
     parser.add_argument("--out-metrics", type=Path, default=None, help="Optional output metrics JSON path (CSV mode)")
     parser.add_argument("--max-rows", type=int, default=100, help="Maximum rows to generate (0 = all rows)")
 
     # Reconstruction-test mode (sanity check: how well did training work?):
     parser.add_argument("--jsonl-eval", type=Path, default=None, help="Print N generated summaries vs. reference from a training-format JSONL (held-out split, not manual input)")
     parser.add_argument("--num-samples", type=int, default=5, help="How many held-out examples to print in --jsonl-eval mode")
-    parser.add_argument("--eval-seed", type=int, default=42, help="Must match training's --seed so the held-out split lines up (train_llava15_lora.py default: 42)")
-    parser.add_argument("--eval-val-ratio", type=float, default=0.1, help="Must match training's --val-ratio so the held-out split lines up (train_llava15_lora.py default: 0.1)")
+    parser.add_argument("--eval-seed", type=int, default=42, help="Must match training's --seed so the held-out split lines up (train_vicuna7b_lora.py default: 42)")
+    parser.add_argument("--eval-val-ratio", type=float, default=0.1, help="Must match training's --val-ratio so the held-out split lines up (train_vicuna7b_lora.py default: 0.1)")
 
     parser.add_argument("--max-length", type=int, default=2048, help="Max input token budget (must match training)")
     parser.add_argument("--max-new-tokens", type=int, default=220, help="Max generated tokens per sample")
@@ -94,7 +101,7 @@ def read_base_model_id(adapter_dir: Path, fallback: str) -> str:
         except json.JSONDecodeError:
             pass
 
-    return "llava-hf/llava-1.5-7b-hf"
+    return "lmsys/vicuna-7b-v1.5"
 
 
 def load_reference_map(path: Path | None) -> dict[str, str]:
@@ -148,10 +155,11 @@ class Summarizer:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         dtype = torch.float16 if torch.cuda.is_available() else torch.float32
 
-        self.processor = AutoProcessor.from_pretrained(adapter_dir)
-        self.tokenizer = self.processor.tokenizer
+        self.tokenizer = AutoTokenizer.from_pretrained(adapter_dir)
+        if self.tokenizer.pad_token_id is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
 
-        model = LlavaForConditionalGeneration.from_pretrained(base_model_id, torch_dtype=dtype)
+        model = AutoModelForCausalLM.from_pretrained(base_model_id, torch_dtype=dtype)
         model = PeftModel.from_pretrained(model, str(adapter_dir))
         self.model = model.to(self.device)
         self.model.eval()
@@ -284,7 +292,7 @@ def run_csv(summarizer: Summarizer, args: argparse.Namespace) -> int:
 def run_jsonl_eval(summarizer: Summarizer, args: argparse.Namespace) -> int:
     """Reconstruction test: generate on held-out examples and print input/reference/generated.
 
-    Replicates train_llava15_lora.py's split (same seed + val_ratio applied to
+    Replicates train_vicuna7b_lora.py's split (same seed + val_ratio applied to
     the same JSONL) so these are the actual validation examples the trainer
     reported eval_loss on, not just arbitrary rows - a genuine held-out check,
     not a training-set echo test.

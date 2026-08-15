@@ -22,8 +22,8 @@ from PIL import ImageDraw
 from peft import LoraConfig, TaskType, get_peft_model
 from torch.utils.data import Dataset
 from transformers import (
-    AutoProcessor,
-    LlavaForConditionalGeneration,
+    AutoModelForCausalLM,
+    AutoTokenizer,
     Trainer,
     TrainerCallback,
     TrainerControl,
@@ -117,12 +117,12 @@ class CheckpointTrackerCallback(TrainerCallback):
         resume_cmd_file = self.output_dir / "resume_command.txt"
         if latest_ckpt:
             resume_cmd = (
-                "../.venv/Scripts/python.exe train_llava15_lora.py "
+                "../.venv/Scripts/python.exe train_vicuna7b_lora.py "
                 f"--output-dir {self.output_dir} --resume-from-checkpoint \"{latest_ckpt}\" --extra-epochs {self.extra_epochs}"
             )
         else:
             resume_cmd = (
-                "../.venv/Scripts/python.exe train_llava15_lora.py "
+                "../.venv/Scripts/python.exe train_vicuna7b_lora.py "
                 f"--output-dir {self.output_dir} --resume-from-checkpoint last"
             )
         resume_cmd_file.write_text(resume_cmd + "\n", encoding="utf-8")
@@ -152,7 +152,7 @@ class CheckpointTrackerCallback(TrainerCallback):
 # Instruction wrapper. Must stay identical between training and generation so the
 # model sees the same prefix at inference time. The source text is appended
 # after this block; the model is trained to produce the ASSISTANT summary only.
-# Matches build_llava15_dataset.py's CNN_DAILYMAIL_PROMPT_INSTRUCTION, so it
+# Matches build_vicuna7b_dataset.py's CNN_DAILYMAIL_PROMPT_INSTRUCTION, so it
 # doesn't normally need to be passed explicitly via --instruction; override it
 # if training on differently-worded source text.
 DEFAULT_INSTRUCTION = (
@@ -191,23 +191,20 @@ class JsonlDataset(Dataset):
         return self.records[index]
 
 
-class LlavaCollator:
-    """Text-only source-text -> summary collator.
+class SummaryCollator:
+    """Source-text -> summary collator for a plain causal LM (Vicuna-7B).
 
-    The image is intentionally NOT used. The source text already carries all
-    the signal we want to summarize, so we train the LLaVA language backbone
-    as a pure text model (no <image> token, no pixel_values). This also
-    removes the <image> token-expansion mismatch that previously leaked the
-    prompt and source text into the loss target, which made the model copy
-    its input instead of summarizing.
+    No image concepts apply here - this loads only Vicuna-7B's own weights
+    (`lmsys/vicuna-7b-v1.5` by default), not a LLaVA checkpoint, so there is
+    no vision encoder or multimodal projector to skip in the first place.
 
     Labels are masked everywhere except the summary, and the source text is
     truncated by tokens so the summary is *always* fully present in the loss
     budget.
     """
 
-    def __init__(self, processor: AutoProcessor, max_length: int = 2048, max_summary_tokens: int = 256, instruction: str = DEFAULT_INSTRUCTION):
-        self.tokenizer = processor.tokenizer
+    def __init__(self, tokenizer: AutoTokenizer, max_length: int = 2048, max_summary_tokens: int = 256, instruction: str = DEFAULT_INSTRUCTION):
+        self.tokenizer = tokenizer
         self.max_length = max_length
         self.max_summary_tokens = max_summary_tokens
         self.instruction = instruction
@@ -258,10 +255,10 @@ class LlavaCollator:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="LLaVA 1.5 7B full LoRA training")
-    parser.add_argument("--dataset-jsonl", type=Path, default=_TRAINING_DIR / "data" / "llava15_train.jsonl", help="Path to JSONL created by build_llava15_dataset.py")
-    parser.add_argument("--output-dir", type=Path, default=_TRAINING_DIR / "runs" / "llava15_lora", help="Where checkpoints and final adapter are saved")
-    parser.add_argument("--model-id", default="llava-hf/llava-1.5-7b-hf", help="Hugging Face model id")
+    parser = argparse.ArgumentParser(description="Vicuna-7B LoRA training (text summarization)")
+    parser.add_argument("--dataset-jsonl", type=Path, default=_TRAINING_DIR / "data" / "vicuna7b_train.jsonl", help="Path to JSONL created by build_vicuna7b_dataset.py")
+    parser.add_argument("--output-dir", type=Path, default=_TRAINING_DIR / "runs" / "vicuna7b_lora", help="Where checkpoints and final adapter are saved")
+    parser.add_argument("--model-id", default="lmsys/vicuna-7b-v1.5", help="Hugging Face model id (plain Vicuna-7B, not a LLaVA checkpoint - no vision weights are downloaded)")
     parser.add_argument("--num-epochs", type=float, default=2.0, help="Number of epochs for full run")
     parser.add_argument("--extra-epochs", type=float, default=1.0, help="Extra epochs to train after the checkpoint when resuming")
     parser.add_argument("--max-samples", type=int, default=0, help="Optional cap for quick checks (0 = all)")
@@ -280,7 +277,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--eval-strategy", choices=["epoch", "steps"], default="epoch", help="Evaluation schedule")
     parser.add_argument("--eval-steps", type=int, default=250, help="Eval interval when --eval-strategy steps")
     parser.add_argument("--resume-from-checkpoint", default="", help="Checkpoint path to resume from, or 'last' for newest checkpoint in output dir")
-    parser.add_argument("--instruction", default=DEFAULT_INSTRUCTION, help="Instruction prefix prepended to every example (must match generation, see generate_llava15_lora.py --instruction)")
+    parser.add_argument("--instruction", default=DEFAULT_INSTRUCTION, help="Instruction prefix prepended to every example (must match generation, see generate_vicuna7b_lora.py --instruction)")
     return parser.parse_args()
 
 
@@ -574,10 +571,13 @@ def main() -> int:
     print(f"Output: {output_dir}")
     print(f"HF cache: {os.environ['HF_HOME']}\n")
 
-    processor = AutoProcessor.from_pretrained(args.model_id)
-    processor.tokenizer.padding_side = "right"
+    tokenizer = AutoTokenizer.from_pretrained(args.model_id)
+    tokenizer.padding_side = "right"
+    if tokenizer.pad_token_id is None:
+        # Vicuna/Llama tokenizers don't ship a pad token by default.
+        tokenizer.pad_token = tokenizer.eos_token
 
-    model = LlavaForConditionalGeneration.from_pretrained(
+    model = AutoModelForCausalLM.from_pretrained(
         args.model_id,
         torch_dtype=torch.float16,
     )
@@ -600,7 +600,7 @@ def main() -> int:
 
     train_ds = JsonlDataset(train_records)
     val_ds = JsonlDataset(val_records)
-    collator = LlavaCollator(processor=processor, max_length=args.max_length, instruction=args.instruction)
+    collator = SummaryCollator(tokenizer=tokenizer, max_length=args.max_length, instruction=args.instruction)
 
     resume_checkpoint: str | None = None
     total_epochs = args.num_epochs
@@ -649,7 +649,7 @@ def main() -> int:
 
     launch_cmd = " ".join([
         "../.venv/Scripts/python.exe",
-        "train_llava15_lora.py",
+        "train_vicuna7b_lora.py",
         f"--dataset-jsonl {data_path}",
         f"--output-dir {output_dir}",
         f"--num-epochs {args.num_epochs}",
@@ -705,8 +705,8 @@ def main() -> int:
     final_dir = output_dir / "final_adapter"
     final_dir.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(final_dir)
-    processor.save_pretrained(final_dir)
-    print(f"Saved LoRA adapter and processor to: {final_dir}")
+    tokenizer.save_pretrained(final_dir)
+    print(f"Saved LoRA adapter and tokenizer to: {final_dir}")
     return 0
 
 

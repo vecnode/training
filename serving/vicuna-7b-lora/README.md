@@ -7,7 +7,7 @@ configured — see below), see the reference summary each page was trained
 against, and run the adapter live to compare all three side by side.
 
 ```
-serving/llava15-lm-lora/
+serving/vicuna-7b-lora/
 ├─ app.py             FastAPI service: web UI + JSON API (loads model + dataset once)
 ├─ dataset.py         Loads & joins OCR + SUMMARIES CSVs into training pairs
 ├─ infer.py           Core Summarizer (importable) + CLI + weight introspection
@@ -16,7 +16,7 @@ serving/llava15-lm-lora/
 └─ static/index.html  Front-end: dataset browser + 3-way comparison
 ```
 
-This folder is deliberately separate from `../../fine-tuning/llava15-lm-lora/`
+This folder is deliberately separate from `../../fine-tuning/vicuna-7b-lora/`
 (the training code) — each pipeline this repo trains gets its own
 `serving/<pipeline>/` folder, independently deployable with its own dependencies.
 
@@ -34,7 +34,7 @@ This folder is deliberately separate from `../../fine-tuning/llava15-lm-lora/`
 flowchart LR
     U["Browser UI / API client"] -->|POST /api/summarize| A["FastAPI app.py"]
     A --> S["Summarizer (loaded once)"]
-    S --> M["LLaVA 1.5 language model (fused adapter)"]
+    S --> M["Vicuna-7B language model (fused adapter)"]
     M --> G["Greedy decode"]
     G --> A --> U
 ```
@@ -43,22 +43,22 @@ flowchart LR
 
 ## Prerequisites
 
-1. **Install deps** (own local venv, separate from `../../fine-tuning/llava15-lm-lora/`'s):
+1. **Install deps** (own local venv, separate from `../../fine-tuning/vicuna-7b-lora/`'s):
    ```bash
    uv_setup.bat
    ```
 2. **A trained artifact**, one of:
-   - the LoRA adapter at `../../fine-tuning/llava15-lm-lora/runs/llava15_lora/final_adapter` (default), or
+   - the LoRA adapter at `../../fine-tuning/vicuna-7b-lora/runs/vicuna7b_lora/final_adapter` (default), or
    - a fused model at `merged_model/` in this folder (recommended for production — see below).
-   ⚠️ `../../fine-tuning/llava15-lm-lora/runs/` is **gitignored**, so the adapter does not ship with
+   ⚠️ `../../fine-tuning/vicuna-7b-lora/runs/` is **gitignored**, so the adapter does not ship with
    the repo. Copy `final_adapter/` (~20 MB) along when deploying elsewhere.
-3. **Base model** `llava-hf/llava-1.5-7b-hf` (~14 GB, public on Hugging Face
+3. **Base model** `lmsys/vicuna-7b-v1.5` (~13 GB, public on Hugging Face
    Hub — not something you trained). In adapter mode, `infer.py` explicitly
    fetches it via `huggingface_hub.snapshot_download` into
-   `../../fine-tuning/llava15-lm-lora/hf_cache` (git-ignored) the first time the server
+   `../../fine-tuning/vicuna-7b-lora/hf_cache` (git-ignored) the first time the server
    starts, with progress logged to the console; later runs are a fast cache
    check, no re-download. Not needed for a fused model (baked in). Requires
-   internet access and ~14 GB free disk on first run.
+   internet access and ~13 GB free disk on first run.
 4. **Hardware**: GPU with ~14–16 GB VRAM for fp16. CPU works but is slow.
 
 ---
@@ -71,7 +71,7 @@ For "use the whole model with the fused adapter", merge once:
 .venv\Scripts\python.exe merge_adapter.py --out merged_model
 ```
 
-This writes a self-contained ~14 GB model to `merged_model/` in this folder.
+This writes a self-contained ~13 GB model to `merged_model/` in this folder.
 From then on `app.py`, `infer.py`, and `inspect_weights.py` **auto-detect and
 prefer it** (no PEFT at runtime, slightly faster). Without it, they fall back
 to the adapter.
@@ -170,5 +170,5 @@ Build the `Summarizer` once and reuse it — loading is the slow part.
   the pre-training pipeline's summarization step, so this model reproduces that
   style — spot-check important outputs for faithfulness.
 - **Keep inference matched to training:** `INSTRUCTION`, `max_length=2048`, and the
-  head+tail truncation in `infer.py` mirror the trainer (`../../fine-tuning/llava15-lm-lora/train_llava15_lora.py`);
+  head+tail truncation in `infer.py` mirror the trainer (`../../fine-tuning/vicuna-7b-lora/train_vicuna7b_lora.py`);
   changing them hurts quality.

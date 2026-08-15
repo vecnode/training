@@ -1,9 +1,10 @@
 """Standalone real-world inference for the OCR -> summary LoRA adapter.
 
 This module is deliberately independent of the training code: deployment should
-not import anything from ../../fine-tuning/llava15-lm-lora/. It loads the base LLaVA 1.5
-language model, attaches the trained LoRA adapter (or loads an already-merged
-model), and turns raw OCR text into a one-paragraph summary.
+not import anything from ../../fine-tuning/vicuna-7b-lora/. It loads the plain
+Vicuna-7B language model (not a LLaVA/vision checkpoint), attaches the trained
+LoRA adapter (or loads an already-merged model), and turns raw text into a
+one-paragraph summary.
 
 Usage (run from this folder):
 
@@ -28,29 +29,35 @@ import os
 import sys
 from pathlib import Path
 
+# Generated text can contain characters outside the Windows console's default
+# cp1252 codepage - without this, printing such a summary crashes with
+# UnicodeEncodeError instead of just printing it.
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 _DEPLOY_DIR = Path(__file__).resolve().parent
-# serving/llava15-lm-lora/ -> repo root -> fine-tuning/llava15-lm-lora/
+# serving/vicuna-7b-lora/ -> repo root -> fine-tuning/vicuna-7b-lora/
 # (the training pipeline this serving folder serves; a top-level sibling of
 # serving/, not a parent - see the repo README for why they're split like this).
-_TRAINING_DIR = _DEPLOY_DIR.parent.parent / "fine-tuning" / "llava15-lm-lora"
+_TRAINING_DIR = _DEPLOY_DIR.parent.parent / "fine-tuning" / "vicuna-7b-lora"
 
 # Reuse the training HF cache so the base model is not re-downloaded.
 os.environ.setdefault("HF_HOME", str(_TRAINING_DIR / "hf_cache"))
 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 
 import torch
-from transformers import AutoProcessor, LlavaForConditionalGeneration
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # ---------------------------------------------------------------------------
-# These MUST stay identical to training (../../fine-tuning/llava15-lm-lora/train_llava15_lora.py).
+# These MUST stay identical to training (../../fine-tuning/vicuna-7b-lora/train_vicuna7b_lora.py).
 # If the instruction wording or truncation differs from training, quality drops.
 # ---------------------------------------------------------------------------
 INSTRUCTION = (
-    "Summarize this scanned document page in one concise paragraph. "
-    "Focus on key entities, dates, events, and any UAP-related content if present.\n\n"
-    "OCR text:\n"
+    "Summarize this news article in one concise paragraph. "
+    "Focus on key entities, dates, and events.\n\n"
+    "Article text:\n"
 )
-DEFAULT_ADAPTER = _TRAINING_DIR / "runs" / "llava15_lora" / "final_adapter"
+DEFAULT_ADAPTER = _TRAINING_DIR / "runs" / "vicuna7b_lora" / "final_adapter"
 DEFAULT_MERGED = _DEPLOY_DIR / "merged_model"
 DEFAULT_MAX_LENGTH = 2048
 DEFAULT_MAX_NEW_TOKENS = 220
@@ -82,14 +89,14 @@ def truncate_ocr_ids(ids: list[int], budget: int) -> list[int]:
 def ensure_base_model_cached(base_id: str) -> str:
     """Ensure the public base model is present in the local Hugging Face cache,
     downloading it on first run if missing. The cache dir is HF_HOME (defaults
-    to ../../fine-tuning/llava15-lm-lora/hf_cache, git-ignored in both a dev checkout and a
+    to ../../fine-tuning/vicuna-7b-lora/hf_cache, git-ignored in both a dev checkout and a
     distributed build - it is resolved relative to this file, so it works in
     either layout).
 
     Deliberately does NOT pass `cache_dir=` to snapshot_download: doing so makes
     huggingface_hub treat that path as the raw hub-cache root, bypassing its
     normal `<HF_HOME>/hub` layout - which silently creates a second, differently
-    laid out copy of the same ~14 GB model alongside the one `from_pretrained()`
+    laid out copy of the same ~13 GB model alongside the one `from_pretrained()`
     already manages, instead of reusing it. Leaving cache_dir unset makes this
     function resolve the cache exactly the way `from_pretrained(base_id, ...)`
     does later in this same function (both read HF_HOME/HF_HUB_CACHE from the
@@ -100,7 +107,7 @@ def ensure_base_model_cached(base_id: str) -> str:
     huggingface_hub checks file hashes/etags before deciding what to fetch. Only
     the base model goes through this path; the trained LoRA adapter is never
     downloaded - it is a local artifact that must already exist on disk (copied
-    in, or produced by ../../fine-tuning/llava15-lm-lora/train_llava15_lora.py on this machine).
+    in, or produced by ../../fine-tuning/vicuna-7b-lora/train_vicuna7b_lora.py on this machine).
     """
     from huggingface_hub import snapshot_download
 
@@ -110,7 +117,7 @@ def ensure_base_model_cached(base_id: str) -> str:
     except Exception as exc:  # network/space/auth failures - fail with a clear message
         raise RuntimeError(
             f"Failed to fetch base model '{base_id}' from Hugging Face Hub.\n"
-            f"This is a one-time ~14 GB download into {os.environ.get('HF_HOME')}.\n"
+            f"This is a one-time ~13 GB download into {os.environ.get('HF_HOME')}.\n"
             f"Check internet access and available disk space, then retry.\n"
             f"Underlying error: {exc}"
         ) from exc
@@ -130,7 +137,7 @@ def read_base_model_id(adapter_dir: Path, fallback: str) -> str:
                 return value
         except json.JSONDecodeError:
             pass
-    return "llava-hf/llava-1.5-7b-hf"
+    return "lmsys/vicuna-7b-v1.5"
 
 
 class Summarizer:
@@ -158,8 +165,8 @@ class Summarizer:
         if merged_model_dir:
             # Standalone, already-merged model (no PEFT needed at runtime).
             merged = Path(merged_model_dir).resolve()
-            self.processor = AutoProcessor.from_pretrained(merged)
-            model = LlavaForConditionalGeneration.from_pretrained(merged, torch_dtype=dtype)
+            self.tokenizer = AutoTokenizer.from_pretrained(merged)
+            model = AutoModelForCausalLM.from_pretrained(merged, torch_dtype=dtype)
         else:
             from peft import PeftModel
 
@@ -167,20 +174,21 @@ class Summarizer:
             if not adapter.exists():
                 raise FileNotFoundError(
                     f"Adapter not found: {adapter}\n"
-                    "../../fine-tuning/llava15-lm-lora/runs/ is gitignored - copy the trained adapter there "
+                    "../../fine-tuning/vicuna-7b-lora/runs/ is gitignored - copy the trained adapter there "
                     "(or pass --adapter-dir pointing at it)."
                 )
             base_id = read_base_model_id(adapter, base_model_id)
             ensure_base_model_cached(base_id)
-            self.processor = AutoProcessor.from_pretrained(adapter)
-            model = LlavaForConditionalGeneration.from_pretrained(base_id, torch_dtype=dtype)
+            self.tokenizer = AutoTokenizer.from_pretrained(adapter)
+            model = AutoModelForCausalLM.from_pretrained(base_id, torch_dtype=dtype)
             model = PeftModel.from_pretrained(model, str(adapter))
 
-        self.tokenizer = self.processor.tokenizer
+        if self.tokenizer.pad_token_id is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
         self.model = model.to(self.device)
         self.model.eval()
 
-        # Fixed wrapper; only the OCR body is re-tokenized per call.
+        # Fixed wrapper; only the source body is re-tokenized per call.
         self.head_ids = self.tokenizer(f"USER: {INSTRUCTION}", add_special_tokens=True).input_ids
         self.suffix_ids = self.tokenizer(" ASSISTANT: ", add_special_tokens=False).input_ids
 

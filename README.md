@@ -41,18 +41,13 @@ scripts default to paths relative to where they're run from.
 
 ```sh
 # --- pre-training: PDF corpus -> OCR/summary/layout/QA CSVs ---
-# Step 1 (PDF -> PNG) shells out to poppler (pdftoppm/pdfinfo on PATH), not a
-# bare Python script - run it via the wrapper, not `uv run ... python`:
 pre-training\exec_1.bat
-# or directly: pre-training\scripts\convert_pdf_to_png.ps1 -DatasetPath Release_1
-uv run --directory pre-training python scripts/ocr_detection_png.py --help
-uv run --directory pre-training python scripts/summarize_ocr_gemma.py --help
 
-# --- fine-tuning/llava15-lm-lora: LLaVA 1.5 7B LoRA (transformers + peft) ---
-# text-only LoRA on the language backbone, trained on CNN/DailyMail text/summary pairs
-uv run --directory fine-tuning/llava15-lm-lora python build_llava15_dataset.py --cnn-dailymail-dir "C:\path\to\cnn_dailymail\3.0.0" --max-samples 2000
-uv run --directory fine-tuning/llava15-lm-lora python train_llava15_lora.py --num-epochs 1 --output-dir runs/llava15_lora
-uv run --directory fine-tuning/llava15-lm-lora python generate_llava15_lora.py --adapter-dir runs/llava15_lora/final_adapter --jsonl-eval data/llava15_train.jsonl --num-samples 5
+# --- fine-tuning/vicuna-7b-lora: Vicuna-7B LoRA (transformers + peft) ---
+# text summarization LoRA, loads lmsys/vicuna-7b-v1.5 directly (no LLaVA/vision weights)
+uv run --directory fine-tuning/vicuna-7b-lora python build_vicuna7b_dataset.py --cnn-dailymail-dir "C:\path\to\cnn_dailymail\3.0.0" --max-samples 2000
+uv run --directory fine-tuning/vicuna-7b-lora python train_vicuna7b_lora.py --num-epochs 1 --output-dir runs/vicuna7b_lora
+uv run --directory fine-tuning/vicuna-7b-lora python generate_vicuna7b_lora.py --adapter-dir runs/vicuna7b_lora/final_adapter --jsonl-eval data/vicuna7b_train.jsonl --num-samples 5
 ```
 
 ## License

@@ -4,9 +4,9 @@ import argparse
 import json
 from pathlib import Path
 
-# Pass this to train_llava15_lora.py's --instruction when training on this
+# Pass this to train_vicuna7b_lora.py's --instruction when training on this
 # source (it's also the trainer's default, so it usually doesn't need to be
-# passed explicitly - see train_llava15_lora.py's DEFAULT_INSTRUCTION).
+# passed explicitly - see train_vicuna7b_lora.py's DEFAULT_INSTRUCTION).
 CNN_DAILYMAIL_PROMPT_INSTRUCTION = (
     "Summarize this news article in one concise paragraph. "
     "Focus on key entities, dates, and events.\n\n"
@@ -17,7 +17,7 @@ CNN_DAILYMAIL_PROMPT_INSTRUCTION = (
 def parse_args() -> argparse.Namespace:
     here = Path(__file__).resolve()
 
-    parser = argparse.ArgumentParser(description="Build LLaVA 1.5 training JSONL from a CNN/DailyMail parquet dump")
+    parser = argparse.ArgumentParser(description="Build Vicuna-7B training JSONL from a CNN/DailyMail parquet dump")
     parser.add_argument(
         "--cnn-dailymail-dir",
         type=Path,
@@ -31,7 +31,7 @@ def parse_args() -> argparse.Namespace:
         default="train",
         help="Which CNN/DailyMail parquet split to read (default: train)",
     )
-    parser.add_argument("--out-jsonl", type=Path, default=here.parent / "data" / "llava15_train.jsonl", help="Output JSONL path (default: data/llava15_train.jsonl)")
+    parser.add_argument("--out-jsonl", type=Path, default=here.parent / "data" / "vicuna7b_train.jsonl", help="Output JSONL path (default: data/vicuna7b_train.jsonl)")
     parser.add_argument("--max-samples", type=int, default=0, help="Optional cap for quick tests (0 = all)")
     parser.add_argument("--max-text-chars", type=int, default=8000, help="Cap source text stored per sample (the trainer further truncates by tokens, head+tail, to fit the summary)")
     return parser.parse_args()

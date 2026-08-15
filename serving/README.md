@@ -6,4 +6,4 @@ in [`../fine-tuning/`](../fine-tuning/README.md) that has a serving story.
 
 | Folder | Serves |
 |---|---|
-| [`llava15-lm-lora/`](llava15-lm-lora/README.md) | [`../fine-tuning/llava15-lm-lora/`](../fine-tuning/llava15-lm-lora/README.md)'s trained adapter |
+| [`vicuna-7b-lora/`](vicuna-7b-lora/README.md) | [`../fine-tuning/vicuna-7b-lora/`](../fine-tuning/vicuna-7b-lora/README.md)'s trained adapter |

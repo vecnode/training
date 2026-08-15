@@ -6,7 +6,7 @@ serialized with a lock so concurrent requests are safe.
 
 By default it loads a fused/merged model from merged_model/ if present
 (recommended for production - see merge_adapter.py), otherwise it falls back to
-the LoRA adapter at ../../fine-tuning/llava15-lm-lora/runs/llava15_lora/final_adapter.
+the LoRA adapter at ../../fine-tuning/vicuna-7b-lora/runs/vicuna7b_lora/final_adapter.
 
 Run (from this folder):
 
@@ -76,7 +76,7 @@ async def lifespan(app: FastAPI):
     print("Shutting down.")
 
 
-app = FastAPI(title="OCR → Summary (LLaVA LoRA)", version="1.0", lifespan=lifespan)
+app = FastAPI(title="Text → Summary (Vicuna-7B LoRA)", version="1.0", lifespan=lifespan)
 
 
 class SummarizeRequest(BaseModel):

@@ -2,7 +2,7 @@
 
 After merging you get a single self-contained model directory that loads without
 PEFT and without the LoRA math at runtime (slightly faster load/inference). The
-trade-off: the merged model is the full ~14 GB fp16 LLaVA, versus the ~20 MB
+trade-off: the merged model is the full ~13 GB fp16 Vicuna-7B, versus the ~20 MB
 adapter. Use this only if you want a portable, dependency-light artifact.
 
 Run (from this folder):
@@ -22,14 +22,14 @@ import os
 from pathlib import Path
 
 _DEPLOY_DIR = Path(__file__).resolve().parent
-# serving/llava15-lm-lora/ -> repo root -> fine-tuning/llava15-lm-lora/
-_TRAINING_DIR = _DEPLOY_DIR.parent.parent / "fine-tuning" / "llava15-lm-lora"
+# serving/vicuna-7b-lora/ -> repo root -> fine-tuning/vicuna-7b-lora/
+_TRAINING_DIR = _DEPLOY_DIR.parent.parent / "fine-tuning" / "vicuna-7b-lora"
 os.environ.setdefault("HF_HOME", str(_TRAINING_DIR / "hf_cache"))
 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 
 import torch
 from peft import PeftModel
-from transformers import AutoProcessor, LlavaForConditionalGeneration
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from infer import DEFAULT_ADAPTER, read_base_model_id
 
@@ -55,14 +55,14 @@ def main() -> int:
     print(f"Output     : {out}")
 
     print("Loading base model (fp16)...")
-    model = LlavaForConditionalGeneration.from_pretrained(base_id, torch_dtype=torch.float16)
+    model = AutoModelForCausalLM.from_pretrained(base_id, torch_dtype=torch.float16)
     print("Attaching adapter and merging...")
     model = PeftModel.from_pretrained(model, str(adapter))
     model = model.merge_and_unload()
 
     out.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(out)
-    AutoProcessor.from_pretrained(adapter).save_pretrained(out)
+    AutoTokenizer.from_pretrained(adapter).save_pretrained(out)
     print(f"Merged model saved to: {out}")
     return 0
 
