@@ -9,7 +9,7 @@ Model Training, Pre-Training, Fine-Tuning and Serving workspace, scaling from a 
 - [training](./training/)
     - Ongoing
 - [fine-tuning](./fine-tuning/)
-    - Ongoing
+    - Fine tune [Vicuna-7b-v1.5](https://huggingface.co/lmsys/vicuna-7b-v1.5) on [CNN/DailyMail](https://huggingface.co/datasets/abisee/cnn_dailymail) dataset
 - [pre-training](./pre-training/)
     - Convert a PDF dataset to image dataset
     - OCR PNG pages with [Surya OCR](https://github.com/datalab-to/surya)
@@ -22,7 +22,7 @@ Model Training, Pre-Training, Fine-Tuning and Serving workspace, scaling from a 
 Text Datasets:
 
 - [abisee/cnn_dailymail](https://huggingface.co/datasets/abisee/cnn_dailymail)
-    - Text Summaries, Text-to-Text, Text-to-Summary (312k rows)
+    - text/summary (312k rows)
     - The CNN / DailyMail Dataset is an English-language dataset containing just over 300k unique news articles as written by journalists at CNN and the Daily Mail. The current version supports both extractive and abstractive summarization. 
 
 <!--
@@ -31,22 +31,16 @@ Text Datasets:
 - [databricks/databricks-dolly-15k](https://huggingface.co/datasets/databricks/databricks-dolly-15k)
 -->
 
-## uv Commands
-
-One `uv` on your PATH drives every pipeline from the repo root — no `cd`
-needed. Each folder below is its own `uv` project (own `pyproject.toml`,
-own `.venv`, own pinned deps); `--directory <folder>` points `uv run` at
-that project's environment *and* working directory in one flag, since some
-scripts default to paths relative to where they're run from.
+## Commands
 
 ```sh
 # --- pre-training: PDF corpus -> OCR/summary/layout/QA CSVs ---
 pre-training\exec_1.bat
 
 # --- fine-tuning/vicuna-7b-lora: Vicuna-7B LoRA (transformers + peft) ---
-# text summarization LoRA, loads lmsys/vicuna-7b-v1.5 directly (no LLaVA/vision weights)
+# text summarization LoRA, loads lmsys/vicuna-7b-v1.5 directly
 uv run --directory fine-tuning/vicuna-7b-lora python build_vicuna7b_dataset.py --cnn-dailymail-dir "C:\path\to\cnn_dailymail\3.0.0" --max-samples 2000
-uv run --directory fine-tuning/vicuna-7b-lora python train_vicuna7b_lora.py --num-epochs 1 --output-dir runs/vicuna7b_lora
+uv run --directory fine-tuning/vicuna-7b-lora python train_vicuna7b_lora.py --num-epochs 2 --output-dir runs/vicuna7b_lora
 uv run --directory fine-tuning/vicuna-7b-lora python generate_vicuna7b_lora.py --adapter-dir runs/vicuna7b_lora/final_adapter --jsonl-eval data/vicuna7b_train.jsonl --num-samples 5
 ```
 
