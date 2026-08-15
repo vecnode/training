@@ -1,9 +1,4 @@
-# Dataset Pre-Training Workspace
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
-
-Local, GPU-first pipeline that turns a PDF corpus into training data.
+# Pre-Training Workspace
 
 - Convert a PDF dataset
 - OCR PNG pages with [Surya OCR](https://github.com/datalab-to/surya)
@@ -51,7 +46,3 @@ including steps that don't have an `exec_N.bat` yet.
 
 All operational batch and Python scripts are now under `scripts/`.
 
-
-## License
-
-Licensed under the [MIT License](./LICENSE)
