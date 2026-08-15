@@ -34,10 +34,12 @@ Python `uv` finds newest" — a too-new CPython (e.g. 3.14) can lack prebuilt
 wheels for pinned deps like `pillow`, which makes `uv run` fail trying to
 build from source instead of installing a wheel.
 
-`fine-tuning/axolotl-ocr-summary/` currently only resolves on Linux/WSL:
-`axolotl[deepspeed]` depends on `triton`, which ships no Windows wheels. This
-is a real platform constraint of that dependency stack, not a bug to silently
-patch around — flag it rather than reworking that project's pins unprompted.
+`fine-tuning/` currently holds `vicuna-7b-lora/` and `qwen25-3b-lora/`, both
+same `transformers`+`peft` pattern. An earlier Axolotl-based
+`axolotl-ocr-summary/` pipeline was removed by the repo owner — if a similar
+pipeline reappears, note that `axolotl[deepspeed]` only resolves its `uv`
+environment on Linux/WSL (`triton` ships no Windows wheels), a real platform
+constraint, not something to patch around silently.
 
 ## Conventions & guardrails
 
@@ -78,8 +80,18 @@ patch around — flag it rather than reworking that project's pins unprompted.
   this repo's first real VLM fine-tune. `protobuf` is a required dependency
   in this pipeline specifically because `lmsys/vicuna-7b-v1.5` ships a raw
   SentencePiece tokenizer that needs it to convert to a fast tokenizer.
-- **`axolotl-ocr-summary/`'s data contract is unrelated and untouched** —
-  it consumes any CSV via `--input --text-col --summary-col`.
+- **`fine-tuning/qwen25-3b-lora/` is `vicuna-7b-lora`'s sibling**, same
+  pattern, `Qwen/Qwen2.5-3B-Instruct` instead. LoRA `target_modules` stay
+  `["q_proj", "v_proj"]` (verified same as Vicuna via `peft`'s default LoRA
+  target-module table for `qwen2`) but the prompt wrapper is ChatML
+  (`<|im_start|>role\n...<|im_end|>`), not Vicuna's `USER:/ASSISTANT:` —
+  verified against the model's actual `tokenizer_config.json`
+  (`eos_token="<|im_end|>"`) before writing the code, not assumed. Before
+  cloning this pattern to a new base model, check its actual attention
+  module names first — `microsoft/Phi-3.5-mini-instruct`, for example, fuses
+  Q/K/V into a single `qkv_proj` linear layer (confirmed by reading
+  `Phi3Attention`'s source), so `target_modules=["q_proj","v_proj"]` would
+  silently attach to nothing on that model.
 - **Cross-folder references use full relative paths from repo root**, e.g.
   `serving/vicuna-7b-lora/` reaches its training counterpart via
   `../../fine-tuning/vicuna-7b-lora/`. When moving or renaming a pipeline

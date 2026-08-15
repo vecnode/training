@@ -1,0 +1,31 @@
+[project]
+name = "qwen25-3b-lora"
+version = "0.1.0"
+description = "Qwen2.5-3B-Instruct LoRA fine-tuning (text summarization)"
+requires-python = ">=3.10"
+dependencies = [
+  "accelerate>=0.33.0",
+  "huggingface-hub>=0.25.0",
+  "pandas>=2.0.0",
+  "peft>=0.12.0",
+  "pillow>=10.0.0",
+  "pyarrow>=14.0.0",
+  "torch==2.11.0",
+  "transformers>=4.45.0",
+]
+# No sentencepiece/protobuf: Qwen2.5's tokenizer is byte-level BPE (ships
+# tokenizer.json/vocab.json/merges.txt), not SentencePiece - unlike
+# lmsys/vicuna-7b-v1.5, there's no raw-tokenizer conversion step that needs them.
+
+[tool.uv]
+package = false
+
+# Pin torch to the CUDA 12.8 build. Without this, `uv sync` resolves the
+# CPU-only wheel from PyPI and GPU training silently stops working.
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }

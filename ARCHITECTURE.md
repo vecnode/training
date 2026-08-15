@@ -69,13 +69,16 @@ of this doc incorrectly assumed it did; fixed here). Steps 2–5
 
 ## Stage 2 — `fine-tuning/`
 
-Two independent example pipelines, both LoRA-based, both sized for a single
-RTX 3090 (24GB):
+Two example pipelines, same `transformers`+`peft` pattern, both LoRA-based,
+both sized for a single RTX 3090 (24GB). (A third, Axolotl-based
+`axolotl-ocr-summary/` pipeline existed earlier but was removed by the repo
+owner — it only resolved its `uv` environment on Linux/WSL, never natively
+on Windows, since `axolotl[deepspeed]` depends on `triton`.)
 
 | Pipeline | Framework | Base model | Data shape |
 |---|---|---|---|
 | [`fine-tuning/vicuna-7b-lora/`](fine-tuning/vicuna-7b-lora/README.md) | `transformers` + `peft` (manual `Trainer` loop) | `lmsys/vicuna-7b-v1.5` — LoRA on `q_proj`/`v_proj`, loaded directly via `AutoModelForCausalLM`/`AutoTokenizer`. No LLaVA checkpoint, no vision encoder, no multimodal projector anywhere in the dependency graph. | JSONL with `text` / `summary` fields |
-| [`fine-tuning/axolotl-ocr-summary/`](fine-tuning/axolotl-ocr-summary/README.md) | [Axolotl](https://axolotl.ai/) (config-driven) | `Qwen/Qwen2.5-3B-Instruct` (full LoRA) or 7-8B (QLoRA) — no vision component | Alpaca-shape JSONL: `{"instruction", "input", "output"}` |
+| [`fine-tuning/qwen25-3b-lora/`](fine-tuning/qwen25-3b-lora/README.md) | `transformers` + `peft` (same pattern as `vicuna-7b-lora/`) | `Qwen/Qwen2.5-3B-Instruct` — LoRA on `q_proj`/`v_proj` (same target modules as Vicuna; `Qwen2ForCausalLM` uses the same separate Q/K/V/O naming, confirmed via `peft`'s own default LoRA target-module table). ChatML prompt format instead of Vicuna's `USER:/ASSISTANT:` (verified against the tokenizer's `chat_template`/`eos_token`). | JSONL with `text` / `summary` fields |
 
 **Naming/loading history: `vicuna-7b-lora`, previously `llava15-lm-lora`,
 originally `llava15-lora`.** Two renames, each fixing a real overstatement:
@@ -127,16 +130,14 @@ to reflect that:
   pipeline builds from, `--instruction` no longer needs to be passed
   explicitly for the common case.
 
-`axolotl-ocr-summary/scripts/prepare_dataset.py` is unrelated to this and
-still reads any CSV via `--input --text-col --summary-col` (Windows note
-below) — it was not touched.
-
-**Platform note — `axolotl-ocr-summary/` is Linux/WSL-only for now.**
-`axolotl[deepspeed]` pulls in `triton`, which publishes no Windows wheels;
-`uv run --directory fine-tuning/axolotl-ocr-summary ...` fails at
-environment-resolution time on native Windows (verified this pass). This is
-a real constraint of that dependency stack, not a bug — not something to
-patch around inside that project without being asked.
+**`qwen25-3b-lora/` is a near-clone of `vicuna-7b-lora/`** — same dataset
+builder logic, same trainer/generator structure, same CLI shape. Two
+verified differences (not assumed): the ChatML prompt wrapper (see table
+above), and no `protobuf`/`sentencepiece` dependency needed (Qwen2.5-3B-Instruct
+ships a ready `tokenizer.json`, unlike Vicuna's raw SentencePiece tokenizer).
+No `serving/qwen25-3b-lora/` yet — `serving/vicuna-7b-lora/` is Vicuna-specific
+(ChatML wrapper differs), so a sibling serving folder would be needed if this
+adapter goes to production.
 
 ### CNN/DailyMail — wired in and verified
 
@@ -203,28 +204,38 @@ from adapting an existing checkpoint (`fine-tuning/`). Not yet designed.
 
 None of the fine-tuning pipelines ship data — `DATASET/`, `data/`, `runs/`,
 `output/` etc. are all git-ignored, drop-zone folders (via the single root
-`.gitignore`). `vicuna-7b-lora/` trains on CNN/DailyMail; `axolotl-ocr-summary/`
-accepts any matching CSV. Example small, permissively-licensed public
-datasets are listed in the root `README.md`'s **Datasets** section.
+`.gitignore`). Both `vicuna-7b-lora/` and `qwen25-3b-lora/` train on
+CNN/DailyMail. Example small, permissively-licensed public datasets are
+listed in the root `README.md`'s **Datasets** section.
+
+### `vicuna-7b-lora`'s real 2-epoch run (repo owner's machine)
+
+2,000-sample JSONL (1,800 train / 200 val), 2 epochs, 900 steps, ~61 min on
+a single RTX 3090. Train loss 1.76 → 0.99, eval_loss essentially flat across
+epochs (1.100 → 1.094 — a mild overfitting signal in isolation, train loss
+kept falling while eval_loss didn't). What matters: reconstruction-test avg
+token-F1 rose from 0.357 (an earlier 1-epoch/1,800-sample run on the
+predecessor `llava15-lm-lora` pipeline) to **0.467** on this run, and the
+generated summaries reproduced exact figures from source text correctly
+(e.g. "383-41" and "70-26" vote counts). Confirms the earlier lesson again:
+eval_loss plateauing is not itself a stop signal — the reconstruction test
+is what actually shows whether a further epoch helped.
 
 ## Verified working (this pass)
 
-`uv run --directory <folder> python <script> --help` was actually executed,
-not assumed, for:
+`uv run --directory <folder> python <script> --help`, and further real
+executions where noted, actually run, not assumed:
 
-- `pre-training` — `scripts/ocr_detection_png.py`, `scripts/summarize_ocr_gemma.py`
-- `fine-tuning/vicuna-7b-lora` — `build_vicuna7b_dataset.py` (including a real
-  5-row CNN/DailyMail smoke test), `train_vicuna7b_lora.py`,
-  `generate_vicuna7b_lora.py`
-- `serving/vicuna-7b-lora` — `app.py` (also fixed a `SyntaxWarning` from
-  unescaped backslashes in three docstrings: `app.py`, `merge_adapter.py`,
-  `inspect_weights.py`)
-
-Confirmed **not** working on native Windows, by design of the dependency,
-not a bug here:
-
-- `fine-tuning/axolotl-ocr-summary` — `triton` has no Windows wheel (see
-  platform note above). Works under WSL/Linux; not attempted here.
+- `fine-tuning/qwen25-3b-lora` — `build_qwen3b_dataset.py`,
+  `train_qwen3b_lora.py`, `generate_qwen3b_lora.py`, plus a real 40-sample
+  smoke train against the actual downloaded `Qwen/Qwen2.5-3B-Instruct`
+  weights, confirming `trainable params > 0` (LoRA genuinely attached to
+  `q_proj`/`v_proj`) rather than trusting `peft`'s target-module table alone.
+- `fine-tuning/vicuna-7b-lora` — real 2,000-sample/2-epoch training run (see
+  above), executed by the repo owner, not just a smoke test.
+- `serving/vicuna-7b-lora` — `app.py --help` (also fixed a `SyntaxWarning`
+  from unescaped backslashes in three docstrings: `app.py`,
+  `merge_adapter.py`, `inspect_weights.py`).
 
 Not executed this pass (no PDFs/poppler set up in this environment):
 
@@ -232,13 +243,19 @@ Not executed this pass (no PDFs/poppler set up in this environment):
 
 ## Next steps
 
-- `fine-tuning/vicuna-7b-lora` has a verified-good first run (see above) —
-  reasonable next moves are more epochs (2–3; no overfitting signal yet) or
-  more samples, judged by the reconstruction test, not loss alone.
-- `axolotl-ocr-summary`'s Windows/WSL split should be decided explicitly
-  (document as WSL-only vs. investigate a triton-free deepspeed config)
-  before it's a blocker for anyone following the root README on Windows.
+- `fine-tuning/vicuna-7b-lora` has a verified-good real run (see above) —
+  reasonable next moves are more samples (the eval_loss plateau suggests
+  more epochs on this same 1,800-row set has limited further upside),
+  judged by the reconstruction test, not loss alone.
+- `fine-tuning/qwen25-3b-lora` is smoke-tested but not yet trained for real
+  — same next step as Vicuna's first run: build a few-thousand-sample JSONL,
+  train, then judge with `--jsonl-eval`.
 - `training/` (from-scratch, non-LoRA) is still undesigned.
 - `fine-tuning/llava15-full-lora` (planned, not started): the first real VLM
   fine-tune in this repo — image+text pairs, vision encoder/projector
-  actually in the training graph, unlike `vicuna-7b-lora`.
+  actually in the training graph, unlike `vicuna-7b-lora`/`qwen25-3b-lora`.
+- A `phi35-mini-lora` sibling (discussed, not started) would need
+  `target_modules=["qkv_proj"]` instead of `["q_proj", "v_proj"]` — Phi-3
+  fuses Q/K/V into one linear layer (confirmed by reading
+  `Phi3Attention`'s source), so the `vicuna-7b-lora`/`qwen25-3b-lora`
+  target-module config would silently attach to nothing on that model.

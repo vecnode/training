@@ -9,9 +9,9 @@ Model Training, Pre-Training, Fine-Tuning and Serving workspace, scaling from a 
 - [training](./training/)
     - Ongoing
 - [fine-tuning](./fine-tuning/)
-    - Fine tune [Vicuna-7b-v1.5](https://huggingface.co/lmsys/vicuna-7b-v1.5) on [CNN/DailyMail](https://huggingface.co/datasets/abisee/cnn_dailymail) dataset
+    - Fine-tune [Qwen2.5-3B-Instruct](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct) on [CNN/DailyMail](https://huggingface.co/datasets/abisee/cnn_dailymail) dataset
+    - Fine-tune [Vicuna-7b-v1.5](https://huggingface.co/lmsys/vicuna-7b-v1.5) on [CNN/DailyMail](https://huggingface.co/datasets/abisee/cnn_dailymail) dataset
 - [pre-training](./pre-training/)
-    - Convert a PDF dataset to image dataset
     - OCR PNG pages with [Surya OCR](https://github.com/datalab-to/surya)
     - Summarize OCR text with ([unsloth/gemma-3-4b-it](https://huggingface.co/unsloth/gemma-3-4b-it))
     - Describe page layout/structure image-grounded with ([unsloth/gemma-3-4b-it](https://huggingface.co/unsloth/gemma-3-4b-it))
