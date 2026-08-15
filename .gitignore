@@ -31,19 +31,22 @@ last_run_prepared/
 merged_model/
 
 # --- Raw/prepared datasets: drop zones, scripts fetch/generate them locally.
-# Each of these keeps a committed README.md as the only tracked file. ---
-DATASET/*
-!DATASET/README.md
-DATASET_JSONL/*
-!DATASET_JSONL/README.md
-data/*
-!data/README.md
-runs/*
-!runs/README.md
-output/*
-!output/README.md
-outputs/*
-!outputs/README.md
+# Each of these keeps a committed README.md as the only tracked file.
+# Patterns with an internal slash anchor to the .gitignore's own directory
+# (repo root here), so they need an explicit **/ prefix to also match inside
+# fine-tuning/<pipeline>/, serving/<pipeline>/, etc. ---
+**/DATASET/*
+!**/DATASET/README.md
+**/DATASET_JSONL/*
+!**/DATASET_JSONL/README.md
+**/data/*
+!**/data/README.md
+**/runs/*
+!**/runs/README.md
+**/output/*
+!**/output/README.md
+**/outputs/*
+!**/outputs/README.md
 
 # --- pre-training: PDF corpus + rendered pages + OCR CSVs ---
 *.png

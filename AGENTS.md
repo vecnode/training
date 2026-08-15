@@ -50,20 +50,21 @@ patch around — flag it rather than reworking that project's pins unprompted.
   are versioned. Datasets are downloaded/pointed-to locally, never checked
   in. Likewise: one root `AGENTS.md`/`CLAUDE.md` pair for the whole repo,
   not one per pipeline folder.
-- **CSV-in is the fine-tuning data contract.** Both `fine-tuning/` pipelines
-  consume a two-column table (source text, target summary) via CLI flags
-  (`--source-csv`/`--summaries-csv`/`--cnn-dailymail-dir`, or
-  `--input --text-col --summary-col`) — they are not hard-wired to
-  `pre-training/`'s output specifically. Any dataset matching that shape
-  works; point it via the command line, don't hardcode a path or add a new
-  fixed folder convention. `fine-tuning/llava15-lora/` in particular is a
-  generic text-summarization LoRA, not an OCR-only pipeline — its CLI flags
-  and JSONL field are named generically (`--source-csv`, `--text`,
-  `--text-file`, JSONL field `text`), not `ocr_*`, precisely because the
-  source can be plain article text (CNN/DailyMail) as easily as OCR output.
-  Its instruction wrapper is a CLI flag
-  (`--instruction` on both the trainer and generator) precisely so it isn't
-  tied to OCR-flavored wording.
+- **`fine-tuning/llava15-lora/` builds its JSONL from CNN/DailyMail only**
+  (`build_llava15_dataset.py --cnn-dailymail-dir`, required) — the earlier
+  dual-source mode that also read pre-training's image-linked OCR/SUMMARIES
+  CSV pair was removed entirely (not renamed) since it isn't needed for this
+  pipeline's current use. Its CLI flags and JSONL field are named
+  generically (`--source-csv` on the generator's batch-eval mode, `--text`,
+  `--text-file`, JSONL field `text`), not `ocr_*` — don't reintroduce
+  OCR-specific naming or resurrect the removed CSV-pair ingestion path
+  without being asked. Its default instruction wrapper matches the
+  CNN/DailyMail prompt, so `--instruction` doesn't need to be passed
+  explicitly for the common case; it's still a CLI flag (on both the trainer
+  and generator, must match between the two) for training on
+  differently-worded source text.
+- **`axolotl-ocr-summary/`'s data contract is unrelated and untouched** —
+  it consumes any CSV via `--input --text-col --summary-col`.
 - **Cross-folder references use full relative paths from repo root**, e.g.
   `serving/llava15-lora/` reaches its training counterpart via
   `../../fine-tuning/llava15-lora/`. When moving or renaming a pipeline

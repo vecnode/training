@@ -18,14 +18,12 @@ from peft import PeftModel
 from transformers import AutoProcessor, LlavaForConditionalGeneration
 
 # Must match the --instruction used for the adapter's training run
-# (train_llava15_lora.py's DEFAULT_INSTRUCTION, or whatever was passed
-# explicitly - e.g. build_llava15_dataset.py's CNN_DAILYMAIL_PROMPT_INSTRUCTION
-# for a CNN/DailyMail-trained adapter). Override with --instruction if the
-# adapter wasn't trained with this default.
+# (train_llava15_lora.py's DEFAULT_INSTRUCTION). Override with --instruction
+# if the adapter was trained with a different one.
 DEFAULT_INSTRUCTION = (
-    "Summarize this scanned document page in one concise paragraph. "
-    "Focus on key entities, dates, events, and any UAP-related content if present.\n\n"
-    "OCR text:\n"
+    "Summarize this news article in one concise paragraph. "
+    "Focus on key entities, dates, and events.\n\n"
+    "Article text:\n"
 )
 
 # In a --text-file you can stack several pages/articles separated by a line
@@ -43,7 +41,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--text-file", type=Path, default=None, help="Read raw source text from this file (single page/article)")
 
     # Batch CSV mode:
-    parser.add_argument("--source-csv", type=Path, default=None, help="Source-text CSV input (e.g., ../output/Release_1_OCR.csv)")
+    parser.add_argument("--source-csv", type=Path, default=None, help="Source-text CSV input with 'text' (and optional 'image'/'status') columns")
     parser.add_argument("--reference-csv", type=Path, default=None, help="Optional reference summaries CSV for token-F1 (e.g., ../output/Release_1_SUMMARIES.csv)")
     parser.add_argument("--out-csv", type=Path, default=_TRAINING_DIR / "runs" / "llava15_lora" / "generated.csv", help="Output CSV with generated predictions (CSV mode)")
     parser.add_argument("--out-metrics", type=Path, default=None, help="Optional output metrics JSON path (CSV mode)")

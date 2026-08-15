@@ -152,13 +152,13 @@ class CheckpointTrackerCallback(TrainerCallback):
 # Instruction wrapper. Must stay identical between training and generation so the
 # model sees the same prefix at inference time. The source text is appended
 # after this block; the model is trained to produce the ASSISTANT summary only.
-# This default is tuned for the pre-training repo's scanned-OCR pages; pass
-# --instruction to override it for other sources (e.g. CNN/DailyMail news
-# articles - see build_llava15_dataset.py's CNN_DAILYMAIL_PROMPT_INSTRUCTION).
+# Matches build_llava15_dataset.py's CNN_DAILYMAIL_PROMPT_INSTRUCTION, so it
+# doesn't normally need to be passed explicitly via --instruction; override it
+# if training on differently-worded source text.
 DEFAULT_INSTRUCTION = (
-    "Summarize this scanned document page in one concise paragraph. "
-    "Focus on key entities, dates, events, and any UAP-related content if present.\n\n"
-    "OCR text:\n"
+    "Summarize this news article in one concise paragraph. "
+    "Focus on key entities, dates, and events.\n\n"
+    "Article text:\n"
 )
 
 

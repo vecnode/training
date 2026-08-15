@@ -1,28 +1,23 @@
 # LLaVA 1.5 7B LoRA training (text-only source text → summary)
 
 Model: `llava-hf/llava-1.5-7b-hf` (LoRA on the language backbone)
-Data: source-text + reference-summary pairs, either OCR text from the
-[pre-training](https://github.com/vecnode/pre-training) repo's
-`outputs/[timestamp]_[dataset]/[timestamp]_[dataset]-OCR.csv` / `-SUMMARIES.csv`,
-or — see below — a local CNN/DailyMail parquet dump. This repo does not run
-OCR, generate summaries, or download CNN/DailyMail itself; it only trains on
-data produced/downloaded elsewhere. All downloads, cache, checkpoints, and
-adapters stay inside this folder.
+Data: CNN/DailyMail article/summary pairs, downloaded locally as Parquet. This
+repo does not download CNN/DailyMail itself; it only trains on the files once
+you've fetched them. All downloads, cache, checkpoints, and adapters stay
+inside this folder.
 
-**Task:** given a page/article's raw text, produce a new one-paragraph summary.
-The page image is **not** used — the text already carries the signal, so we
-train the LLaVA language model as a pure text model. Loss is computed only on the
-summary, and long input is truncated by tokens (head + tail) so the summary is
-always preserved in the training budget.
+**Task:** given an article's raw text, produce a new one-paragraph summary.
+No image is used — this is a pure text model. Loss is computed only on the
+summary, and long input is truncated by tokens (head + tail) so the summary
+is always preserved in the training budget.
 
-## CNN/DailyMail source (current focus)
+## Dataset — CNN/DailyMail
 
-Current work: training this pipeline against
 [`abisee/cnn_dailymail`](https://huggingface.co/datasets/abisee/cnn_dailymail)
-(config `3.0.0`) instead of the pre-training repo's OCR CSVs, as a public,
-no-setup-required stand-in dataset. `axolotl-ocr-summary/` is untouched by
-this — it already accepts CNN/DailyMail via `--text-col article --summary-col
-highlights` on its own CSV-based prep script.
+(config `3.0.0`), a public, no-setup-required news-summarization dataset.
+`axolotl-ocr-summary/` is untouched by this — it already accepts CNN/DailyMail
+via `--text-col article --summary-col highlights` on its own CSV-based prep
+script.
 
 **Where the dataset lives:** downloaded locally to
 `C:\Users\luisarandas\Desktop\cnn_dailymail\3.0.0\` (outside this repo, and
@@ -55,14 +50,6 @@ the JSONL contract the trainer reads: `article -> text`, `highlights ->
 summary` — each record also carries `"source": "cnn_dailymail"` and the
 original `id` so it's traceable back to the source row.
 
-Because this is clean article text rather than noisy scanned OCR, training
-uses a different instruction wrapper
-(`CNN_DAILYMAIL_PROMPT_INSTRUCTION` in `build_llava15_dataset.py`, "Summarize
-this news article..." instead of "Summarize this scanned document page...
-UAP-related content") — pass it explicitly via `train_llava15_lora.py
---instruction` (see step 3 below) since the trainer's default instruction is
-still tuned for the OCR use case.
-
 **Size guidance for a single RTX 3090 (24GB):** the full 287k-row train split
 is far more than a LoRA on 2 attention projections needs and would take many
 hours per epoch. Start with `--max-samples` in the low thousands (e.g.
@@ -80,8 +67,8 @@ This installs project dependencies (including `transformers`, `peft`,
 
 ### 2) Build JSONL dataset
 
-**CNN/DailyMail** (current focus) — point `--cnn-dailymail-dir` at the local
-Parquet folder, cap rows with `--max-samples` (recommended, see sizing above):
+Point `--cnn-dailymail-dir` at the local Parquet folder, cap rows with
+`--max-samples` (recommended, see sizing above):
 
 ```bash
 .venv\Scripts\python.exe build_llava15_dataset.py --cnn-dailymail-dir "C:\Users\luisarandas\Desktop\cnn_dailymail\3.0.0" --cnn-dailymail-split train --max-samples 2000
@@ -93,18 +80,9 @@ or from the repo root without activating the venv:
 uv run --directory fine-tuning/llava15-lora python build_llava15_dataset.py --cnn-dailymail-dir "C:\Users\luisarandas\Desktop\cnn_dailymail\3.0.0" --cnn-dailymail-split train --max-samples 2000
 ```
 
-**Pre-training OCR CSVs** (original source, still supported) — point
-`--source-csv` / `--summaries-csv` at the pre-training repo's per-run output
-files (the OCR CSV's `full_path` column is already absolute, so no `--root`
-juggling is needed):
-
-```bash
-.venv\Scripts\python.exe build_llava15_dataset.py --source-csv "C:\path\to\pre-training\outputs\[timestamp]_[dataset]\[timestamp]_[dataset]-OCR.csv" --summaries-csv "C:\path\to\pre-training\outputs\[timestamp]_[dataset]\[timestamp]_[dataset]-SUMMARIES.csv"
-```
-
-Either way, output is `data/llava15_train.jsonl`. Training consumes the
-`text` and `summary` fields (`image_path`/`prompt`/`source`/`id` are kept
-for reference but are ignored by the text-only trainer).
+Output is `data/llava15_train.jsonl`. Training consumes the `text` and
+`summary` fields (`prompt`/`source`/`id` are kept for reference but are
+ignored by the text-only trainer).
 
 ### 3) Smoke test (must pass before a full run)
 
@@ -112,13 +90,10 @@ for reference but are ignored by the text-only trainer).
 .venv\Scripts\python.exe train_llava15_lora.py --max-samples 256 --num-epochs 1
 ```
 
-When training on CNN/DailyMail, add `--instruction` so the wrapper matches
-the news-article prompt used to build the JSONL (`generate_llava15_lora.py`
-needs the same `--instruction` later, at inference):
-
-```bash
-.venv\Scripts\python.exe train_llava15_lora.py --max-samples 256 --num-epochs 1 --instruction "Summarize this news article in one concise paragraph. Focus on key entities, dates, and events.\n\nArticle text:\n"
-```
+The trainer's default `--instruction` already matches the prompt
+`build_llava15_dataset.py` used to build the JSONL, so nothing extra is
+needed for CNN/DailyMail. Only pass `--instruction` if you're training on
+differently-worded source text.
 
 Expected: train loss decreases and `eval_loss` is numeric (not `nan`).
 
@@ -133,7 +108,7 @@ and the loss is masked so it covers the summary tokens only.
 ```mermaid
 flowchart TB
 	subgraph Input
-		T1["Source text (page/article)"]
+		T1["Source text (article)"]
 		I1["Instruction wrapper"]
 	end
 
@@ -251,13 +226,13 @@ masking, the optimizer, and the loss head.
 Inline text:
 
 ```bash
-.venv\Scripts\python.exe generate_llava15_lora.py --adapter-dir runs/llava15_lora/final_adapter --text "CONFIDENTIAL ... your raw source-text characters here ..."
+.venv\Scripts\python.exe generate_llava15_lora.py --adapter-dir runs/llava15_lora/final_adapter --text "LONDON, England (Reuters) -- ... your raw article text here ..."
 ```
 
-From a file (best for long pages/articles — paste the text into a `.txt` first):
+From a file (best for long articles — paste the text into a `.txt` first):
 
 ```bash
-.venv\Scripts\python.exe generate_llava15_lora.py --adapter-dir runs/llava15_lora/final_adapter --text-file my_page.txt
+.venv\Scripts\python.exe generate_llava15_lora.py --adapter-dir runs/llava15_lora/final_adapter --text-file my_article.txt
 ```
 
 The summary is printed to the console. Source text longer than the token
@@ -266,15 +241,17 @@ are kept; nothing breaks on very long input.
 
 ### 6) Batch evaluate against reference summaries (optional)
 
-Run the adapter over a source-text CSV and score it against your reference
-summaries (again pointing at the pre-training repo's per-run CSVs):
+Run the adapter over a source-text CSV and score it against reference
+summaries. `--source-csv` needs a `text` column (and optionally `image`/
+`status` columns, unused here but harmless if present); `--reference-csv`
+needs a matching `summary` column:
 
 ```bash
-.venv\Scripts\python.exe generate_llava15_lora.py --adapter-dir runs/llava15_lora/final_adapter --source-csv "C:\path\to\pre-training\outputs\[timestamp]_[dataset]\[timestamp]_[dataset]-OCR.csv" --reference-csv "C:\path\to\pre-training\outputs\[timestamp]_[dataset]\[timestamp]_[dataset]-SUMMARIES.csv" --out-csv runs/llava15_lora/generated.csv --max-rows 200
+.venv\Scripts\python.exe generate_llava15_lora.py --adapter-dir runs/llava15_lora/final_adapter --source-csv path\to\articles.csv --reference-csv path\to\references.csv --out-csv runs/llava15_lora/generated.csv --max-rows 200
 ```
 
 What this gives you:
-- `runs/llava15_lora/generated.csv` with one generated summary per page
+- `runs/llava15_lora/generated.csv` with one generated summary per row
 - `runs/llava15_lora/generated_metrics.json` with counts and average token-F1 vs reference summaries
 
 Track `avg_token_f1` across epochs as a quick quantitative trend, and skim

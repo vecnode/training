@@ -10,8 +10,8 @@ project (own `pyproject.toml`/`.venv`) — see its README for setup and data.
 
 ## Current focus
 
-`llava15-lora/` is being wired up to train against a local CNN/DailyMail
-dump instead of (or alongside) the pre-training repo's OCR CSVs — see
-[`llava15-lora/README.md`](llava15-lora/README.md#cnn-dailymail-source-current-focus)
-for the dataset format and commands. `axolotl-ocr-summary/` is unchanged.
+`llava15-lora/` trains on plain text/summary pairs — currently a local
+CNN/DailyMail Parquet dump, not OCR output. See
+[`llava15-lora/README.md`](llava15-lora/README.md) for the dataset format
+and commands. `axolotl-ocr-summary/` is unchanged.
 

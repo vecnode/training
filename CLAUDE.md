@@ -21,16 +21,17 @@ root covers the whole repo; subfolders don't get their own.
   shared root Python environment.
 - **`fine-tuning/llava15-lora/`** trains a LoRA adapter on
   `llava-hf/llava-1.5-7b-hf`'s language backbone only (vision tower unused) —
-  it's a generic text-summarization fine-tune, not OCR-specific. Its CLI
-  flags and JSONL field are named generically (`--source-csv`, `--text`,
-  `--text-file`, JSONL field `text`) rather than `ocr_*`, on purpose — don't
-  reintroduce `ocr_*` naming into this pipeline's general-purpose interface.
-  Two interchangeable data sources: pre-training's OCR/SUMMARIES CSVs, or a
-  local CNN/DailyMail parquet dump via
-  `build_llava15_dataset.py --cnn-dailymail-dir`. The instruction wrapper is
-  a CLI flag (`--instruction`, both trainer and generator) — it must match
-  between training and generation, and the OCR-flavored default is wrong for
-  non-OCR sources like CNN/DailyMail.
+  it's a generic text-summarization fine-tune, not OCR-specific. It builds
+  its JSONL from a local CNN/DailyMail Parquet dump only
+  (`build_llava15_dataset.py --cnn-dailymail-dir`, required) — the earlier
+  mode that also read pre-training's image-linked OCR/SUMMARIES CSV pair was
+  removed entirely, not just renamed. CLI flags and the JSONL field are named
+  generically (`--source-csv`, `--text`, `--text-file`, JSONL field `text`)
+  rather than `ocr_*`, on purpose — don't reintroduce `ocr_*` naming or bring
+  back the removed CSV-pair ingestion path without being asked. The default
+  `--instruction` now matches the CNN/DailyMail prompt, so it doesn't need to
+  be passed explicitly for the common case; it's still overridable (both
+  trainer and generator, must match between the two) for other wording.
 - **`fine-tuning/axolotl-ocr-summary/`** currently only resolves its `uv`
   environment on Linux/WSL — `axolotl[deepspeed]` pulls in `triton`, which
   has no Windows wheels. Don't try to "fix" this by editing that project's

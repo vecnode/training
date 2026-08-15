@@ -45,9 +45,8 @@ uv run --directory pre-training python scripts/ocr_detection_png.py --help
 uv run --directory pre-training python scripts/summarize_ocr_gemma.py --help
 
 # --- fine-tuning/llava15-lora: LLaVA 1.5 7B LoRA (transformers + peft) ---
-# text-only LoRA on the language backbone; JSONL from either source below
+# text-only LoRA on the language backbone, trained on CNN/DailyMail text/summary pairs
 uv run --directory fine-tuning/llava15-lora python build_llava15_dataset.py --cnn-dailymail-dir "C:\path\to\cnn_dailymail\3.0.0" --max-samples 2000
-uv run --directory fine-tuning/llava15-lora python build_llava15_dataset.py --source-csv <path> --summaries-csv <path>
 uv run --directory fine-tuning/llava15-lora python train_llava15_lora.py --num-epochs 1 --output-dir runs/llava15_lora
 uv run --directory fine-tuning/llava15-lora python generate_llava15_lora.py --adapter-dir runs/llava15_lora/final_adapter --text "..."
 ```
