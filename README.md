@@ -8,6 +8,7 @@ Model Training, Pre-Training, Fine-Tuning and Serving workspace, scaling from a 
 
 - [training](./training/)
     - Train K-Means on [MNIST](www.kaggle.com/datasets/hojjatk/mnist-dataset) dataset
+    - Train Variational Autoencoder (VAE) on [MNIST](www.kaggle.com/datasets/hojjatk/mnist-dataset) dataset
     - Train Logistic Regression on [uci.edu/adult](https://archive.ics.uci.edu/dataset/2/adult) dataset
 - [fine-tuning](./fine-tuning/)
     - Fine-tune [Qwen2.5-3B-Instruct](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct) on [CNN/DailyMail](https://huggingface.co/datasets/abisee/cnn_dailymail) dataset
@@ -49,6 +50,11 @@ uv run --directory training/adult-income-logreg python evaluate_logreg.py --data
 uv run --directory training/mnist-kmeans python build_mnist_dataset.py --data-dir "C:\path\to\mnist-dataset" --output-dir data
 uv run --directory training/mnist-kmeans python train_kmeans.py --data-path data/mnist.npz --k 10 --num-iters 50 --output-dir runs/mnist_kmeans
 uv run --directory training/mnist-kmeans python evaluate_kmeans.py --data-path data/mnist.npz --centroids-path runs/mnist_kmeans/centroids.npz --output-dir runs/mnist_kmeans
+
+# --- training/mnist-vae: custom convolutional VAE from scratch (torch autograd) on MNIST ---
+uv run --directory training/mnist-vae python build_mnist_dataset.py --data-dir "C:\path\to\mnist-dataset" --output-dir data
+uv run --directory training/mnist-vae python train_vae.py --data-path data/mnist.npz --latent-dim 32 --beta 1.0 --num-epochs 30 --batch-size 128 --output-dir runs/mnist_vae
+uv run --directory training/mnist-vae python evaluate_vae.py --data-path data/mnist.npz --checkpoint-path runs/mnist_vae/vae_best.pt --output-dir runs/mnist_vae
 
 # --- pre-training: PDF corpus -> OCR/summary/layout/QA CSVs ---
 pre-training\exec_1.bat
