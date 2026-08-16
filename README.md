@@ -7,7 +7,7 @@ Model Training, Pre-Training, Fine-Tuning and Serving workspace, scaling from a 
 ## Repository
 
 - [training](./training/)
-    - Ongoing
+    - Train Logistic Regression on [uci.edu/adult](https://archive.ics.uci.edu/dataset/2/adult) dataset
 - [fine-tuning](./fine-tuning/)
     - Fine-tune [Qwen2.5-3B-Instruct](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct) on [CNN/DailyMail](https://huggingface.co/datasets/abisee/cnn_dailymail) dataset
     - Fine-tune [Vicuna-7b-v1.5](https://huggingface.co/lmsys/vicuna-7b-v1.5) on [CNN/DailyMail](https://huggingface.co/datasets/abisee/cnn_dailymail) dataset
@@ -24,6 +24,9 @@ Text Datasets:
 - [abisee/cnn_dailymail](https://huggingface.co/datasets/abisee/cnn_dailymail)
     - text/summary (312k rows)
     - The CNN / DailyMail Dataset is an English-language dataset containing just over 300k unique news articles as written by journalists at CNN and the Daily Mail. The current version supports both extractive and abstractive summarization. 
+- [uci.edu/adult](https://archive.ics.uci.edu/dataset/2/adult)
+    -  Predict whether annual income of an individual exceeds $50K/yr based on census data. Also known as "Census Income" dataset. 
+    - DOI: 10.24432/C5XW20
 
 <!--
 - [EdinburghNLP/xsum](https://huggingface.co/datasets/EdinburghNLP/xsum)
@@ -34,6 +37,12 @@ Text Datasets:
 ## Commands
 
 ```sh
+# --- training/adult-income-logreg: logistic regression from scratch (raw numpy) ---
+# no scikit-learn/pandas - sigmoid, cross-entropy loss, and gradient descent written by hand
+uv run --directory training/adult-income-logreg python build_income_dataset.py --data-dir "C:\path\to\adult" --output-dir data
+uv run --directory training/adult-income-logreg python train_logreg.py --data-path data/adult_income.npz --num-epochs 300 --output-dir runs/adult_logreg
+uv run --directory training/adult-income-logreg python evaluate_logreg.py --data-path data/adult_income.npz --weights-path runs/adult_logreg/logreg_weights.npz
+
 # --- pre-training: PDF corpus -> OCR/summary/layout/QA CSVs ---
 pre-training\exec_1.bat
 
