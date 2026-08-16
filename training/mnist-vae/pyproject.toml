@@ -1,0 +1,28 @@
+[project]
+name = "mnist-vae"
+version = "0.1.0"
+description = "Custom convolutional VAE (encoder/decoder/ELBO written by hand, torch autograd) trained from scratch on MNIST"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.26.0",
+  "torch==2.11.0",
+]
+# No pythae/lightning-bolts or any prebuilt VAE library: the encoder,
+# decoder, reparameterization trick, and ELBO (reconstruction + KL) loss are
+# all written out by hand as a plain nn.Module - torch is used only for
+# tensor ops, autograd, and GPU execution, the same role it plays in
+# fine-tuning/*-lora (which likewise write their own training loop rather
+# than importing one).
+
+[tool.uv]
+package = false
+
+# Pin torch to the CUDA 12.8 build. Without this, `uv sync` resolves the
+# CPU-only wheel from PyPI and GPU training silently stops working.
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
