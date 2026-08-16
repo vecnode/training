@@ -7,6 +7,7 @@ Model Training, Pre-Training, Fine-Tuning and Serving workspace, scaling from a 
 ## Repository
 
 - [training](./training/)
+    - Train K-Means on [MNIST](www.kaggle.com/datasets/hojjatk/mnist-dataset) dataset
     - Train Logistic Regression on [uci.edu/adult](https://archive.ics.uci.edu/dataset/2/adult) dataset
 - [fine-tuning](./fine-tuning/)
     - Fine-tune [Qwen2.5-3B-Instruct](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct) on [CNN/DailyMail](https://huggingface.co/datasets/abisee/cnn_dailymail) dataset
@@ -25,8 +26,9 @@ Text Datasets:
     - text/summary (312k rows)
     - The CNN / DailyMail Dataset is an English-language dataset containing just over 300k unique news articles as written by journalists at CNN and the Daily Mail. The current version supports both extractive and abstractive summarization. 
 - [uci.edu/adult](https://archive.ics.uci.edu/dataset/2/adult)
-    -  Predict whether annual income of an individual exceeds $50K/yr based on census data. Also known as "Census Income" dataset. 
+    - tabular classification - Predict whether annual income of an individual exceeds $50K/yr based on census data. Also known as "Census Income" dataset. 
     - DOI: 10.24432/C5XW20
+
 
 <!--
 - [EdinburghNLP/xsum](https://huggingface.co/datasets/EdinburghNLP/xsum)
@@ -42,6 +44,11 @@ Text Datasets:
 uv run --directory training/adult-income-logreg python build_income_dataset.py --data-dir "C:\path\to\adult" --output-dir data
 uv run --directory training/adult-income-logreg python train_logreg.py --data-path data/adult_income.npz --num-epochs 300 --output-dir runs/adult_logreg
 uv run --directory training/adult-income-logreg python evaluate_logreg.py --data-path data/adult_income.npz --weights-path runs/adult_logreg/logreg_weights.npz
+
+# --- training/mnist-kmeans: k-means from scratch (raw numpy) on raw-pixel MNIST ---
+uv run --directory training/mnist-kmeans python build_mnist_dataset.py --data-dir "C:\path\to\mnist-dataset" --output-dir data
+uv run --directory training/mnist-kmeans python train_kmeans.py --data-path data/mnist.npz --k 10 --num-iters 50 --output-dir runs/mnist_kmeans
+uv run --directory training/mnist-kmeans python evaluate_kmeans.py --data-path data/mnist.npz --centroids-path runs/mnist_kmeans/centroids.npz --output-dir runs/mnist_kmeans
 
 # --- pre-training: PDF corpus -> OCR/summary/layout/QA CSVs ---
 pre-training\exec_1.bat

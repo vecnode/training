@@ -1,0 +1,15 @@
+[project]
+name = "mnist-kmeans"
+version = "0.1.0"
+description = "K-means clustering from scratch (raw numpy, no scikit-learn) on raw-pixel MNIST"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.26.0",
+]
+# Deliberately no scikit-learn: centroid init, nearest-centroid assignment,
+# centroid update, and the cluster<->label matching used for evaluation are
+# all written by hand. numpy is used only as a fast array container (matrix
+# products, elementwise ops), not as a source of ready-made ML routines.
+
+[tool.uv]
+package = false
