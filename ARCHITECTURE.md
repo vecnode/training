@@ -198,7 +198,23 @@ app.py --help` verified working.
 ## Stage 4 — `training/`
 
 Reserved for from-scratch / non-LoRA training of other models, as distinct
-from adapting an existing checkpoint (`fine-tuning/`). Not yet designed.
+from adapting an existing checkpoint (`fine-tuning/`).
+
+[`training/adult-income-logreg/`](training/adult-income-logreg/README.md) is
+the first pipeline here: logistic regression on the UCI
+[Adult / Census Income](https://archive.ics.uci.edu/dataset/2/adult)
+dataset, implemented with raw numpy rather than scikit-learn — the sigmoid,
+binary cross-entropy loss, gradient derivation, and gradient-descent update
+loop are all written out by hand in `train_logreg.py` so the math stays
+visible, and `build_income_dataset.py` parses the raw CSV files and does
+one-hot/z-score encoding without pandas. Own `uv` project like every other
+pipeline folder, but no torch/CUDA dependency at all — just `numpy`.
+Verified end-to-end against the real dataset: 30,162 train / 15,060 test
+rows after dropping `"?"` rows (matches the cleaned-variant counts in
+`adult.names` exactly), 300 epochs of batch gradient descent, 84.6% test
+accuracy (in line with the 84–86% published for tree-based methods on this
+same cleaned split — a from-scratch linear model landing close to that is
+the expected sanity-check result, not a target to beat).
 
 ## Datasets
 

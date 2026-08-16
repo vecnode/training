@@ -1,0 +1,15 @@
+[project]
+name = "adult-income-logreg"
+version = "0.1.0"
+description = "Logistic regression from scratch (raw numpy, no scikit-learn) on the UCI Adult / Census Income dataset"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.26.0",
+]
+# Deliberately no scikit-learn/pandas: this pipeline implements the sigmoid,
+# loss, and gradient-descent update by hand so the math stays visible. numpy
+# is used only as a fast array container (dot products, elementwise ops),
+# not as a source of ready-made ML routines.
+
+[tool.uv]
+package = false
