@@ -92,6 +92,22 @@ constraint, not something to patch around silently.
   Q/K/V into a single `qkv_proj` linear layer (confirmed by reading
   `Phi3Attention`'s source), so `target_modules=["q_proj","v_proj"]` would
   silently attach to nothing on that model.
+- **`training/imdb-sentiment-cnn/`** trains a Text CNN (Kim 2014) **from
+  scratch** on the Large Movie Review Dataset — binary sentiment
+  classification, 25k train / 25k test, judged by accuracy on the held-out
+  25k test split. Hand-written philosophy like the rest of `training/`: no
+  torchtext/transformers/nltk, no `DataLoader` (numpy-permutation batching),
+  and **no GloVe/pretrained embeddings by design** — strictly IMDB-only
+  data, random-init trainable embeddings; don't silently add pretrained
+  vectors. `build_imdb_dataset.py` verifies exactly 12,500 review files per
+  split and refuses to build on a partial extraction (the dataset was once
+  caught mid-extraction with `train/pos` still filling up). Data lives at
+  `E:\datasets\aclImdb_v1` (a nested `aclImdb/` subfolder is also accepted).
+  Verified real run: **89.2%** test acc, 20 epochs in ~31 s on the RTX 3090;
+  dropout 0.5, best checkpoint by val acc (peaks ~epoch 3, then the model
+  overfits fast — train acc → 100%); a dropout-0.7 variant scored worse and
+  was discarded. The 50k unlabeled reviews are deliberately unused — a
+  future AWD-LSTM / transformer+MLM pipeline is where they belong.
 - **Cross-folder references use full relative paths from repo root**, e.g.
   `serving/vicuna-7b-lora/` reaches its training counterpart via
   `../../fine-tuning/vicuna-7b-lora/`. When moving or renaming a pipeline

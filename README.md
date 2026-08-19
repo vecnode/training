@@ -7,6 +7,7 @@ Model Training, Pre-Training and Fine-Tuning workspace, scaling from a single RT
 ## Repository
 
 - [training](./training/)
+    - Train TextCNN on [Large Movie Review](https://ai.stanford.edu/~amaas/data/sentiment/) dataset
     - Train VQ-VAE on [CIFAR-10](https://cave.cs.toronto.edu/kriz/cifar.html) dataset
     - Train VAE on [MNIST](www.kaggle.com/datasets/hojjatk/mnist-dataset) dataset
     - Train K-Means on [MNIST](www.kaggle.com/datasets/hojjatk/mnist-dataset) dataset
@@ -27,11 +28,18 @@ Text Datasets:
 - [abisee/cnn_dailymail](https://huggingface.co/datasets/abisee/cnn_dailymail)
     - text/summary (312k rows)
     - The CNN / DailyMail Dataset is an English-language dataset containing just over 300k unique news articles as written by journalists at CNN and the Daily Mail. The current version supports both extractive and abstractive summarization. 
+
+- [CIFAR-10](https://cave.cs.toronto.edu/kriz/cifar.html)
+    - The CIFAR-10 dataset consists of 60000 32x32 colour images in 10 classes, with 6000 images per class. There are 50000 training images and 10000 test images. 
+
+- [Large Movie Review Dataset](https://ai.stanford.edu/~amaas/data/sentiment/)
+    - A binary sentiment classification benchmark introduced in Maas et al., ACL 2011. Also known as aclImdb or simply IMDB. 
+    - Contains 50,000 polarized movie reviews scraped from IMDB - 25,000 for training and 25,000 for testing.
+
 - [uci.edu/adult](https://archive.ics.uci.edu/dataset/2/adult)
     - tabular classification - Predict whether annual income of an individual exceeds $50K/yr based on census data. Also known as "Census Income" dataset. 
     - DOI: 10.24432/C5XW20
-- [CIFAR-10](https://cave.cs.toronto.edu/kriz/cifar.html)
-    - The CIFAR-10 dataset consists of 60000 32x32 colour images in 10 classes, with 6000 images per class. There are 50000 training images and 10000 test images. 
+
 
 <!--
 - [EdinburghNLP/xsum](https://huggingface.co/datasets/EdinburghNLP/xsum)
@@ -62,6 +70,12 @@ uv run --directory training/mnist-kmeans python evaluate_kmeans.py --data-path d
 uv run --directory training/adult-income-logreg python build_income_dataset.py --data-dir "C:\path\to\adult" --output-dir data
 uv run --directory training/adult-income-logreg python train_logreg.py --data-path data/adult_income.npz --num-epochs 300 --output-dir runs/adult_logreg
 uv run --directory training/adult-income-logreg python evaluate_logreg.py --data-path data/adult_income.npz --weights-path runs/adult_logreg/logreg_weights.npz
+
+# --- training/imdb-sentiment-cnn: Text CNN from scratch (torch, random embeddings) on the Large Movie Review Dataset ---
+# binary sentiment classification (pos/neg);
+uv run --directory training/imdb-sentiment-cnn python build_imdb_dataset.py --data-dir "C:\path\to\aclImdb_v1" --output-dir data
+uv run --directory training/imdb-sentiment-cnn python train_cnn.py --data-path data/imdb.npz --num-epochs 20 --batch-size 128 --output-dir runs/imdb_cnn
+uv run --directory training/imdb-sentiment-cnn python evaluate_cnn.py --data-path data/imdb.npz --checkpoint-path runs/imdb_cnn/cnn_best.pt --vocab-path data/vocab.txt --output-dir runs/imdb_cnn
 
 # --- pre-training: PDF corpus -> OCR/summary/layout/QA CSVs ---
 pre-training\exec_1.bat

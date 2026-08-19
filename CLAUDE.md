@@ -10,8 +10,8 @@ root covers the whole repo; subfolders don't get their own.
 
 - Staged workspace: `pre-training/` (PDF corpus → OCR/summary/layout/QA CSVs,
   currently out of scope for active work) → `fine-tuning/` (LoRA adapters,
-  current focus) → `serving/` (inference) → `training/` (reserved,
-  from-scratch training, not yet built). Full map in `ARCHITECTURE.md`.
+  current focus) → `serving/` (inference) → `training/` (from-scratch
+  training). Full map in `ARCHITECTURE.md`.
 - **Env:** `uv` only, one binary at the root drives every pipeline via
   `uv run --directory <folder> <command>` — see `README.md`'s uv Commands
   section for the exact list. Each leaf folder pins its own `.python-version`
@@ -55,6 +55,18 @@ root covers the whole repo; subfolders don't get their own.
   (confirmed by reading `Phi3Attention`'s source) and would need
   `target_modules=["qkv_proj"]` instead, or LoRA silently attaches to
   nothing.
+- **`training/imdb-sentiment-cnn/`** — Text CNN (Kim 2014) trained **from
+  scratch** on the Large Movie Review Dataset (binary sentiment, 25k
+  train / 25k test): hand-written torch (no torchtext/transformers, no
+  `DataLoader`, numpy-permutation batching) and **no GloVe/pretrained
+  embeddings by design** — strictly IMDB-only, random-init trainable
+  embeddings. `build_imdb_dataset.py` verifies exactly 12,500 files per
+  split (refuses a partial extraction; the dataset was once caught
+  mid-extraction) and accepts a nested `aclImdb/` subfolder; data at
+  `E:\datasets\aclImdb_v1`. Verified real run: **89.2%** test acc, 20
+  epochs in ~31 s on the RTX 3090; dropout 0.5, best checkpoint by val acc
+  (peaks ~epoch 3, then fast overfitting — train acc → 100%). Details in
+  `ARCHITECTURE.md` Stage 4.
 - **An Axolotl-based `fine-tuning/axolotl-ocr-summary/` pipeline existed
   earlier and was removed by the repo owner.** If something similar returns,
   note `axolotl[deepspeed]` only resolves its `uv` environment on Linux/WSL
