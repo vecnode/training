@@ -216,6 +216,30 @@ accuracy (in line with the 84–86% published for tree-based methods on this
 same cleaned split — a from-scratch linear model landing close to that is
 the expected sanity-check result, not a target to beat).
 
+[`training/cifar10-vqvae/`](training/cifar10-vqvae/README.md) is the next
+pipeline here: a VQ-VAE
+([van den Oord et al., 2017](https://arxiv.org/abs/1711.00937)) trained
+from scratch on CIFAR-10 (raw python-format pickles at
+`E:\datasets\cifar-10-python`, parsed by hand with stdlib `pickle` — no
+torchvision/keras, no Pillow). It is the **in-place successor of the
+former `cifar10-vae`** (renamed/converted): a plain VAE's blur comes from
+Gaussian-posterior averaging in the ELBO, and VQ-VAE removes that
+mechanism — an 8x8 grid of D-dim encoder vectors is replaced by its
+nearest neighbors in a learned 512x64 codebook (straight-through
+estimator, EMA codebook updates, commitment loss), and reconstruction is
+driven purely by MSE. Same hand-written philosophy as the whole `training/`
+folder: encoder/quantizer/decoder all plain `torch.nn`, torch only for
+tensor ops/autograd/GPU, numpy-permutation batching, no VQ-VAE library,
+no `DataLoader`. ~0.74M params (codebook included), ~40–60 min for 100
+epochs on a single RTX 3090. Reconstruction-only by design (encode ->
+quantize -> decode a real image back; no learned prior over the discrete
+codes, so no sampling) — the discrete code grid is the substrate for a
+later learned prior (the planned cascade). Its evaluator computes the same
+metric suite used to judge the predecessor VAE (MAE/PSNR/SSIM/
+high-frequency retention) plus a codebook-usage check, so the VQ-VAE vs
+VAE comparison is reproducible; measured numbers in the pipeline README's
+"Verified runs".
+
 ## Datasets
 
 None of the fine-tuning pipelines ship data — `DATASET/`, `data/`, `runs/`,
@@ -242,6 +266,17 @@ is what actually shows whether a further epoch helped.
 `uv run --directory <folder> python <script> --help`, and further real
 executions where noted, actually run, not assumed:
 
+- `training/cifar10-vqvae` (successor of the former `cifar10-vae`) — real
+  runs on the RTX 3090 against the actual downloaded CIFAR-10 python
+  pickles (`E:\datasets\cifar-10-python`): `build_cifar10_dataset.py`
+  wrote `data/cifar10.npz` (50k train / 10k test); `train_vqvae.py` and
+  `evaluate_vqvae.py` run end-to-end (100 epochs, ~10–15 min, codebook
+  perplexity ~404/512, 512/512 codes fired on test — no collapse).
+  Measured reconstruction on the held-out test set: PSNR **25.2 dB**, SSIM
+  **0.884**, MAE 0.042, high-frequency detail kept **73.8%** — vs the
+  predecessor VAE's best (PSNR 21.5 dB, SSIM 0.742, HF 51.4%), i.e. the
+  discrete-codebook family removes the plain-VAE blur mechanism. Full
+  numbers in the pipeline README's "Verified runs".
 - `fine-tuning/qwen25-3b-lora` — `build_qwen3b_dataset.py`,
   `train_qwen3b_lora.py`, `generate_qwen3b_lora.py`, plus a real 40-sample
   smoke train against the actual downloaded `Qwen/Qwen2.5-3B-Instruct`
@@ -266,7 +301,10 @@ Not executed this pass (no PDFs/poppler set up in this environment):
 - `fine-tuning/qwen25-3b-lora` is smoke-tested but not yet trained for real
   — same next step as Vicuna's first run: build a few-thousand-sample JSONL,
   train, then judge with `--jsonl-eval`.
-- `training/` (from-scratch, non-LoRA) is still undesigned.
+- `training/` has a verified real `cifar10-vqvae` run (see above) — the
+  planned next rung is stage 2 of its cascade: a learned prior over the
+  discrete code grid (PixelCNN/transformer over code indices, or a latent
+  DDPM), latent-diffusion style.
 - `fine-tuning/llava15-full-lora` (planned, not started): the first real VLM
   fine-tune in this repo — image+text pairs, vision encoder/projector
   actually in the training graph, unlike `vicuna-7b-lora`/`qwen25-3b-lora`.

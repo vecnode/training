@@ -2,13 +2,14 @@
 
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue) ![License: MIT](https://img.shields.io/badge/license-MIT-blue)
 
-Model Training, Pre-Training, Fine-Tuning and Serving workspace, scaling from a single RTX 3090 (24GB) up to multi-GPU.
+Model Training, Pre-Training and Fine-Tuning workspace, scaling from a single RTX 3090 (24GB) up to multi-GPU.
 
 ## Repository
 
 - [training](./training/)
+    - Train VQ-VAE on [CIFAR-10](https://cave.cs.toronto.edu/kriz/cifar.html) dataset
+    - Train VAE on [MNIST](www.kaggle.com/datasets/hojjatk/mnist-dataset) dataset
     - Train K-Means on [MNIST](www.kaggle.com/datasets/hojjatk/mnist-dataset) dataset
-    - Train Variational Autoencoder (VAE) on [MNIST](www.kaggle.com/datasets/hojjatk/mnist-dataset) dataset
     - Train Logistic Regression on [uci.edu/adult](https://archive.ics.uci.edu/dataset/2/adult) dataset
 - [fine-tuning](./fine-tuning/)
     - Fine-tune [Qwen2.5-3B-Instruct](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct) on [CNN/DailyMail](https://huggingface.co/datasets/abisee/cnn_dailymail) dataset
@@ -29,7 +30,8 @@ Text Datasets:
 - [uci.edu/adult](https://archive.ics.uci.edu/dataset/2/adult)
     - tabular classification - Predict whether annual income of an individual exceeds $50K/yr based on census data. Also known as "Census Income" dataset. 
     - DOI: 10.24432/C5XW20
-
+- [CIFAR-10](https://cave.cs.toronto.edu/kriz/cifar.html)
+    - The CIFAR-10 dataset consists of 60000 32x32 colour images in 10 classes, with 6000 images per class. There are 50000 training images and 10000 test images. 
 
 <!--
 - [EdinburghNLP/xsum](https://huggingface.co/datasets/EdinburghNLP/xsum)
@@ -40,21 +42,26 @@ Text Datasets:
 ## Commands
 
 ```sh
-# --- training/adult-income-logreg: logistic regression from scratch (raw numpy) ---
-# no scikit-learn/pandas - sigmoid, cross-entropy loss, and gradient descent written by hand
-uv run --directory training/adult-income-logreg python build_income_dataset.py --data-dir "C:\path\to\adult" --output-dir data
-uv run --directory training/adult-income-logreg python train_logreg.py --data-path data/adult_income.npz --num-epochs 300 --output-dir runs/adult_logreg
-uv run --directory training/adult-income-logreg python evaluate_logreg.py --data-path data/adult_income.npz --weights-path runs/adult_logreg/logreg_weights.npz
+# --- training/cifar10-vqvae: custom VQ-VAE from scratch (torch autograd, EMA codebook) on CIFAR-10 ---
+uv run --directory training/cifar10-vqvae python build_cifar10_dataset.py --data-dir "C:\path\to\cifar-10-python" --output-dir data
+uv run --directory training/cifar10-vqvae python train_vqvae.py --data-path data/cifar10.npz --codebook-size 512 --embedding-dim 64 --commitment-beta 0.25 --num-epochs 100 --batch-size 128 --output-dir runs/cifar10_vqvae
+uv run --directory training/cifar10-vqvae python evaluate_vqvae.py --data-path data/cifar10.npz --checkpoint-path runs/cifar10_vqvae/vqvae_best.pt --output-dir runs/cifar10_vqvae
+
+# --- training/mnist-vae: custom convolutional VAE from scratch (torch autograd) on MNIST ---
+uv run --directory training/mnist-vae python build_mnist_dataset.py --data-dir "C:\path\to\mnist-dataset" --output-dir data
+uv run --directory training/mnist-vae python train_vae.py --data-path data/mnist.npz --latent-dim 32 --beta 1.0 --num-epochs 30 --batch-size 128 --output-dir runs/mnist_vae
+uv run --directory training/mnist-vae python evaluate_vae.py --data-path data/mnist.npz --checkpoint-path runs/mnist_vae/vae_best.pt --output-dir runs/mnist_vae
 
 # --- training/mnist-kmeans: k-means from scratch (raw numpy) on raw-pixel MNIST ---
 uv run --directory training/mnist-kmeans python build_mnist_dataset.py --data-dir "C:\path\to\mnist-dataset" --output-dir data
 uv run --directory training/mnist-kmeans python train_kmeans.py --data-path data/mnist.npz --k 10 --num-iters 50 --output-dir runs/mnist_kmeans
 uv run --directory training/mnist-kmeans python evaluate_kmeans.py --data-path data/mnist.npz --centroids-path runs/mnist_kmeans/centroids.npz --output-dir runs/mnist_kmeans
 
-# --- training/mnist-vae: custom convolutional VAE from scratch (torch autograd) on MNIST ---
-uv run --directory training/mnist-vae python build_mnist_dataset.py --data-dir "C:\path\to\mnist-dataset" --output-dir data
-uv run --directory training/mnist-vae python train_vae.py --data-path data/mnist.npz --latent-dim 32 --beta 1.0 --num-epochs 30 --batch-size 128 --output-dir runs/mnist_vae
-uv run --directory training/mnist-vae python evaluate_vae.py --data-path data/mnist.npz --checkpoint-path runs/mnist_vae/vae_best.pt --output-dir runs/mnist_vae
+# --- training/adult-income-logreg: logistic regression from scratch (raw numpy) ---
+# no scikit-learn/pandas - sigmoid, cross-entropy loss, and gradient descent written by hand
+uv run --directory training/adult-income-logreg python build_income_dataset.py --data-dir "C:\path\to\adult" --output-dir data
+uv run --directory training/adult-income-logreg python train_logreg.py --data-path data/adult_income.npz --num-epochs 300 --output-dir runs/adult_logreg
+uv run --directory training/adult-income-logreg python evaluate_logreg.py --data-path data/adult_income.npz --weights-path runs/adult_logreg/logreg_weights.npz
 
 # --- pre-training: PDF corpus -> OCR/summary/layout/QA CSVs ---
 pre-training\exec_1.bat
