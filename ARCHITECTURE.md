@@ -240,6 +240,26 @@ high-frequency retention) plus a codebook-usage check, so the VQ-VAE vs
 VAE comparison is reproducible; measured numbers in the pipeline README's
 "Verified runs".
 
+[`training/imdb-sentiment-cnn/`](training/imdb-sentiment-cnn/README.md)
+is the newest pipeline here: a Text CNN
+([Kim, 2014](https://arxiv.org/abs/1408.5882)) trained **from scratch** on
+the [Large Movie Review Dataset](https://ai.stanford.edu/~amaas/data/sentiment/)
+(25k train / 25k test binary sentiment; raw review `.txt` files at
+`E:\datasets\aclImdb_v1`, parsed by hand — no torchtext/datasets/nltk).
+Same hand-written philosophy as the whole `training/` folder: a
+randomly-initialized **trainable** embedding (**no GloVe** — strictly
+IMDB-only data by design), three parallel 1D convs (widths 3/4/5 × 128
+filters) + ReLU + 1-max-pool per filter, concat, dropout 0.5, linear → 2;
+torch only for tensor ops/autograd/GPU, numpy-permutation batching, no
+`DataLoader`. ~6.6M params (6.4M in the embedding), **20 epochs in ~31 s**
+on a single RTX 3090, best checkpoint by val acc (peaks at epoch 3 before
+the model overfits — train acc → 100%). Measured on the held-out 25k test
+split: **89.2% accuracy** (neg 88.96% / pos 89.43%) — well above Kim's
+published CNN-rand (82.7%), which the README attributes to full-length
+reviews plus val-based early stopping. A dropout-0.7 variant scored 87.9%
+on test and was discarded. Full numbers in the pipeline README's
+"Verified runs".
+
 ## Datasets
 
 None of the fine-tuning pipelines ship data — `DATASET/`, `data/`, `runs/`,
@@ -305,6 +325,11 @@ Not executed this pass (no PDFs/poppler set up in this environment):
   planned next rung is stage 2 of its cascade: a learned prior over the
   discrete code grid (PixelCNN/transformer over code indices, or a latent
   DDPM), latent-diffusion style.
+- `training/imdb-sentiment-cnn` is verified at **89.2%** test acc with
+  random embeddings in ~31 s — natural next rungs: a GloVe variant
+  (~+1–3 pts expected), or the bigger from-scratch projects that use the
+  50k unlabeled reviews (AWD-LSTM LM-pretrain + fine-tune, or a small
+  transformer with MLM pretraining, both ~91% territory).
 - `fine-tuning/llava15-full-lora` (planned, not started): the first real VLM
   fine-tune in this repo — image+text pairs, vision encoder/projector
   actually in the training graph, unlike `vicuna-7b-lora`/`qwen25-3b-lora`.

@@ -1,0 +1,29 @@
+[project]
+name = "imdb-sentiment-cnn"
+version = "0.1.0"
+description = "Custom Text CNN (Kim 2014: embedding + multi-width 1D convs + 1-max-pool, written by hand, torch autograd) trained from scratch on the Large Movie Review Dataset - binary sentiment classification with no pretrained embeddings"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.26.0",
+  "torch==2.11.0",
+]
+# No text library (no torchtext, no transformers, no nltk, no gensim): the
+# tokenizer is a plain regex in build_imdb_dataset.py, the model is plain
+# nn.Modules (embedding + Conv1d + max-pool + linear), torch is used only
+# for tensor ops, autograd, and GPU execution - the same role it plays in
+# training/cifar10-vqvae and the rest of this repo. No GloVe/pretrained
+# embeddings by design: everything is learned from the 25k labeled
+# reviews, strictly IMDB-only.
+
+[tool.uv]
+package = false
+
+# Pin torch to the CUDA 12.8 build. Without this, `uv sync` resolves the
+# CPU-only wheel from PyPI and GPU training silently stops working.
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
