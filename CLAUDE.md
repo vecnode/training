@@ -67,6 +67,21 @@ root covers the whole repo; subfolders don't get their own.
   epochs in ~31 s on the RTX 3090; dropout 0.5, best checkpoint by val acc
   (peaks ~epoch 3, then fast overfitting — train acc → 100%). Details in
   `ARCHITECTURE.md` Stage 4.
+- **`training/flow-matching-mnist/`** — flow matching / rectified flow
+  trained **from scratch** on MNIST, the contemporary counterpart to
+  `training/mnist-vae` (same `data/mnist.npz` contract, same hand-written
+  PNG writer, comparable sample grids). Hand-written torch: no
+  `diffusers`/`torchcfm`/`torchdiffeq`/`torchvision`, no `DataLoader`; the
+  UNet velocity field, sinusoidal time embedding, EMA, and Euler/Heun ODE
+  samplers are all written out. Objective is plain MSE against the
+  conditional-OT path's velocity; `--sigma-min 0.0` (default) makes it
+  exactly rectified flow. **No noise schedule, no ELBO, by design** — don't
+  add betas/`alpha_bar`, a variance head, or loss reweighting. 1,175,841
+  params at `--base-channels 32`; data at `E:\datasets\mnist-dataset`.
+  Careful with the evaluator's round-trip sweep: it measures **ODE
+  discretization error, not quality** (an untrained model scores
+  near-perfectly on it). No FID by design — it would need a pretrained
+  Inception. Details in `ARCHITECTURE.md` Stage 4.
 - **An Axolotl-based `fine-tuning/axolotl-ocr-summary/` pipeline existed
   earlier and was removed by the repo owner.** If something similar returns,
   note `axolotl[deepspeed]` only resolves its `uv` environment on Linux/WSL

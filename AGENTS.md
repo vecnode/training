@@ -8,7 +8,7 @@ relate; this file is conventions and how-to-run.
 
 A staged model-training workspace — `pre-training/` (data prep) →
 `fine-tuning/` (LoRA adapters) → `serving/` (inference) → `training/`
-(reserved, from-scratch training) — scaling from a single RTX 3090 (24GB) up
+(from-scratch training) — scaling from a single RTX 3090 (24GB) up
 to multi-GPU. Each leaf folder is an independently deployable `uv` project;
 there is no shared root Python environment. Full detail in
 [`ARCHITECTURE.md`](ARCHITECTURE.md).
@@ -108,6 +108,31 @@ constraint, not something to patch around silently.
   overfits fast — train acc → 100%); a dropout-0.7 variant scored worse and
   was discarded. The 50k unlabeled reviews are deliberately unused — a
   future AWD-LSTM / transformer+MLM pipeline is where they belong.
+- **`training/flow-matching-mnist/`** trains a flow-matching /
+  rectified-flow generative model **from scratch** on MNIST — the
+  contemporary counterpart to `training/mnist-vae` (same dataset, same
+  `data/mnist.npz` contract, same hand-written zlib PNG writer, so the two
+  sample grids are directly comparable). Hand-written philosophy like the
+  rest of `training/`: no `diffusers`/`torchcfm`/`torchdiffeq`/
+  `torchvision`, no `DataLoader` (numpy-permutation batching) — the UNet
+  velocity field, sinusoidal time embedding, EMA, and Euler/Heun ODE
+  samplers are all written out. The objective is
+  `mse(v(x_t, t), x1 - (1-sigma_min)*x0)` on the conditional-OT path
+  `x_t = (1-(1-sigma_min)*t)*x0 + t*x1` (Lipman et al.
+  [2210.02747](https://arxiv.org/abs/2210.02747)); at the default
+  `--sigma-min 0.0` that is exactly rectified flow (Liu et al.
+  [2209.03003](https://arxiv.org/abs/2209.03003)). **There is no noise
+  schedule and no ELBO here on purpose** — don't add betas/`alpha_bar`, a
+  variance head, or loss reweighting; that turns it back into a DDPM.
+  1,175,841 params at `--base-channels 32`; data at
+  `E:\datasets\mnist-dataset` (shared with `mnist-kmeans`/`mnist-vae`).
+  **The evaluator's round-trip MAE/PSNR sweep measures ODE discretization
+  error, not sample quality** — a near-zero velocity field round-trips
+  almost perfectly since the identity is its own inverse, and a 2-epoch
+  smoke run really did beat the converged model on it. Judge samples by
+  `samples_grid.png` plus the nearest-neighbour memorization check. There
+  is deliberately **no FID** (it needs a pretrained Inception, against this
+  folder's from-scratch rule) — don't add a substitute score.
 - **Cross-folder references use full relative paths from repo root**, e.g.
   `serving/vicuna-7b-lora/` reaches its training counterpart via
   `../../fine-tuning/vicuna-7b-lora/`. When moving or renaming a pipeline

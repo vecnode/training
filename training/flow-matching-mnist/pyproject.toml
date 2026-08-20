@@ -1,0 +1,29 @@
+[project]
+name = "flow-matching-mnist"
+version = "0.1.0"
+description = "Custom flow-matching / rectified-flow generative model (UNet velocity field written by hand, torch autograd) trained from scratch on MNIST"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.26.0",
+  "torch==2.11.0",
+]
+# No diffusers/torchcfm/torchdiffeq or any prebuilt flow-matching or
+# diffusion library: the UNet, the sinusoidal time embedding, the
+# conditional-OT probability path, the velocity-regression loss, and the
+# Euler/Heun ODE samplers are all written out by hand - torch is used only
+# for tensor ops, autograd, and GPU execution, the same role it plays in
+# training/mnist-vae and fine-tuning/*-lora (which likewise write their own
+# training loop rather than importing one).
+
+[tool.uv]
+package = false
+
+# Pin torch to the CUDA 12.8 build. Without this, `uv sync` resolves the
+# CPU-only wheel from PyPI and GPU training silently stops working.
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
