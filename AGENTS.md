@@ -133,6 +133,66 @@ constraint, not something to patch around silently.
   `samples_grid.png` plus the nearest-neighbour memorization check. There
   is deliberately **no FID** (it needs a pretrained Inception, against this
   folder's from-scratch rule) — don't add a substitute score.
+- **`training/rvq-audio-codec/`** trains a neural audio codec with
+  residual vector quantization **from scratch** on LJSpeech — the
+  EnCodec/SoundStream/DAC architecture, and the **first audio pipeline in
+  this repo**. Hand-written philosophy like the rest of `training/`: the
+  RIFF/WAVE parser *and* writer, the SEANet conv encoder/decoder, the RVQ
+  (factorized 8-dim lookup, cosine distance, EMA updates, dead-code
+  revival), the mel filterbank, the multi-scale STFT discriminator and
+  SI-SDR are all written out — no `encodec`/`descript-audio-codec`/
+  `audiocraft`, no `torchaudio`/`librosa`/`soundfile`/`scipy`, no
+  `DataLoader` (numpy-permutation batching over utterance indices, one
+  random crop each). 7,338,658 params plus a 2,112,582-param discriminator
+  used only in training. Data at `E:\datasets\LJSpeech-1.1` (a nested
+  `LJSpeech-1.1/` subfolder is also accepted); `build_ljspeech_dataset.py`
+  verifies exactly 13,100 wavs and refuses a partial extraction, and writes
+  a memmapped `data/ljspeech_audio.i16` + `data/ljspeech_index.npz` rather
+  than an `.npz` of samples — 3.8 GB of int16 becomes 7.6 GB as float32 and
+  won't sit in RAM. Things not to silently undo:
+  - **Trained at LJSpeech's native 22,050 Hz, no resampler.** Frame rate is
+    68.9 Hz and the bitrate 5.51 kbps — don't "fix" these to EnCodec's
+    published 24 kHz / 75 Hz / 6 kbps figures, and don't add a resampler
+    without being asked.
+  - **Quantizer dropout is load-bearing**, not a regularizer: it is what
+    lets one trained model serve the whole 1→8 codebook ladder. Removing it
+    means eight separate runs for the same demo.
+  - **The discriminator is staged behind `--adv-start-step`** on purpose;
+    `--lambda-adv 0` is the reconstruction-only A/B. Don't make it
+    unconditional.
+  - **The dead-code cutoff is a fraction of uniform codebook usage, not an
+    absolute count.** The absolute 2.0 that EnCodec and
+    `vector-quantize-pytorch` use is a trap at this batch size (32 × 69 =
+    2,208 vectors over 1,024 entries → uniform usage is 2.16), and the
+    first smoke run really did report 1,023 of 1,024 entries revived per
+    codebook. After the fix, 0.
+  - **The discriminator is ~8x the cost of the whole rest of the step**
+    (7.75 steps/s reconstruction-only vs 0.95 fp32 with it, RTX 3090, batch
+    32). `--disc-bf16 1` (default) runs **only the critic** under bf16
+    autocast → 2.01 steps/s, 10.8 GiB instead of 16.8, no architecture
+    change. Don't extend that autocast over the generator: the codebook
+    lookup and EMA updates must stay fp32, since bf16 EMA statistics stop
+    accumulating small updates — the exact thing dead-code revival exists
+    to detect. `cudnn.benchmark` and TF32 were measured and do nothing here.
+  - **The EMA weights are only better once converged.** After n steps they
+    still carry `ema_decay**n` of the random init — the 802-step smoke
+    checkpoint at decay 0.999 is 45% initialization and scored 9.02 mel
+    against the live weights' 7.42. A full run leaves that behind
+    (`0.999**24060 = 4e-11`), so `--use-ema 1` stays the default, but
+    `evaluate_codec.py` computes the share from the checkpoint and warns
+    above 1%. Don't remove that warning or the `global_step`/`ema_decay`
+    fields it reads.
+  - **SI-SDR is a weak proxy for a GAN-trained codec** — the adversarial
+    loss trades waveform/phase alignment for perceptual realism, so a
+    better-sounding model can score worse. Judge by the emitted
+    `original_NN.wav` / `recon_nq{8,4,2,1}_NN.wav` pairs and the
+    per-codebook usage table. There is deliberately **no ViSQOL/PESQ/
+    NISQA** (external binary or pretrained network), the same rule that
+    keeps FID out of `flow-matching-mnist` — don't add a substitute score.
+  It is the deliberate successor of `training/cifar10-vqvae` (one codebook
+  → eight; full-latent L2 lookup → 8-dim factorized cosine lookup), and its
+  collapse-mitigation findings are meant to transfer back there.
+
 - **Cross-folder references use full relative paths from repo root**, e.g.
   `fine-tuning/vicuna-7b-lora/README.md` reaches a sibling pipeline via
   `../../<stage>/<pipeline>/`. When moving, renaming or removing a pipeline

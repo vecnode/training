@@ -206,7 +206,7 @@ folder independently deployable.
 ## Stage 4 — `training/`
 
 From-scratch / non-LoRA training of other models, as distinct from
-adapting an existing checkpoint (`fine-tuning/`). Six pipelines so far,
+adapting an existing checkpoint (`fine-tuning/`). Seven pipelines so far,
 each an independent `uv` project and each writing out by hand whatever the
 usual library would hide.
 
@@ -317,6 +317,74 @@ deliberately **no FID** — it would require a pretrained Inception network,
 against this folder's from-scratch rule, and a substitute number would be
 worse than none. Measured figures in the pipeline README's "Verified runs".
 
+[`training/rvq-audio-codec/`](training/rvq-audio-codec/README.md) is the
+newest pipeline here, and the **first audio pipeline in the repo**: a
+neural audio codec with residual vector quantization (the
+EnCodec/SoundStream/DAC architecture) trained **from scratch** on LJSpeech
+(13,100 wavs at `E:\datasets\LJSpeech-1.1`, 23.92 h, parsed by a
+hand-written RIFF/WAVE chunk walker - no torchaudio, no soundfile, no
+librosa, no scipy). A SEANet-style strided conv encoder maps the waveform
+to 68.9 frames/s, a stack of 8 codebooks x 1,024 entries quantizes each
+frame (each codebook quantizing the residual the previous one left), and a
+mirrored transposed-conv decoder reconstructs it - 5.51 kbps. 7,338,658
+params, plus a 2,112,582-param multi-scale STFT discriminator that exists
+only during training.
+
+It is the deliberate successor of
+[`training/cifar10-vqvae`](training/cifar10-vqvae/README.md): that folder
+has one codebook of 512 entries looked up in the full 64-dim latent, this
+one stacks eight looked up in an 8-dim factorized projection under cosine
+distance, with EMA updates *and* dead-code re-initialization. 9 bits per
+latent position is enough for a 32x32 thumbnail and nowhere near enough for
+a waveform; RVQ is how the bit budget is bought without a `K^N` codebook.
+It is also the layer every modern audio LM (VALL-E, MusicGen, Moshi) sits
+on - those models generate codec tokens, not waveforms.
+
+Three things are deliberate and worth not undoing. (1) LJSpeech is 22,050
+Hz and is trained at that **native rate** - no resampler is written, so the
+frame rate is 68.9 Hz and the bitrate 5.51 kbps rather than EnCodec's
+published 24 kHz / 75 Hz / 6 kbps. (2) **Quantizer dropout** (a random
+`n_q` in `[1, N]` on half of each batch) is what makes one trained model
+serve the whole 1->8 codebook ladder; without it the 1->8 quality demo
+would need eight separate runs. (3) The discriminator is **staged** behind
+`--adv-start-step`, because a randomly-initialized generator fighting a
+randomly-initialized discriminator collapses a codec in the first thousand
+steps; `--lambda-adv 0` turns it off entirely for a reconstruction-only
+A/B.
+
+Judging it needs the same care as flow matching's ODE sweep. **SI-SDR is a
+weak proxy for a GAN-trained codec** - the adversarial loss trades exact
+waveform/phase alignment for perceptual realism, so a model that sounds
+better can post a worse SI-SDR than a reconstruction-only one. The real
+evaluation is the `original_NN.wav` / `recon_nq{8,4,2,1}_NN.wav` files the
+evaluator writes (hand-written 44-byte RIFF writer, the inverse of the
+builder's parser), plus the per-codebook usage table that says whether the
+8th codebook is doing any work. There is deliberately **no ViSQOL/PESQ/
+NISQA** - each needs an external binary or a pretrained network, the same
+rule that keeps FID out of `flow-matching-mnist`.
+
+The discriminator is also where the run's cost lives, by a wide margin.
+Measured on the RTX 3090 at batch 32: reconstruction-only runs at 7.75
+steps/s, and turning the discriminator on in fp32 drops that to **0.95** —
+**8x**, because its spectrograms are much larger than the waveform they
+judge (173 x 257 positions at the 512-point resolution against 22,080
+samples, three resolutions, three passes per step) and those conv shapes
+map badly onto fp32 tensor cores. `cudnn.benchmark` and TF32 matmul were
+both measured and change nothing (0.90-0.95 steps/s, inside the noise).
+What does work is **bf16 autocast on the critic only** (`--disc-bf16`,
+default on): 2.01 steps/s and 10.8 GiB peak instead of 16.8, turning a
+7-hour 60-epoch run into a 3.3-hour one with no architecture change. The
+generator, the codebook lookup and every EMA update deliberately stay fp32
+— bf16 EMA statistics would quietly stop accumulating small updates, which
+is exactly the mechanism dead-code revival exists to detect.
+
+One guardrail came from getting it wrong first: the dead-code cutoff is a
+*fraction of uniform codebook usage*, not the absolute 2.0 that EnCodec and
+`vector-quantize-pytorch` use. One batch here is 32 x 69 = 2,208 vectors
+over 1,024 entries, so uniform usage is only 2.16 per entry and an absolute
+2.0 condemns half a healthy codebook every sweep - the first smoke run
+reported 1,023 of 1,024 entries "revived" per codebook; after the fix, 0.
+
 
 ## Datasets
 
@@ -325,6 +393,14 @@ None of the fine-tuning pipelines ship data — `DATASET/`, `data/`, `runs/`,
 `.gitignore`). Both `vicuna-7b-lora/` and `qwen25-3b-lora/` train on
 CNN/DailyMail. Example small, permissively-licensed public datasets are
 listed in the root `README.md`'s **Datasets** section.
+
+`training/rvq-audio-codec` is the one pipeline whose prepared data is too
+large for the `.npz` contract the others share: LJSpeech is 3.80 GB of
+int16, which becomes 7.6 GB as float32. It writes a raw
+`data/ljspeech_audio.i16` opened with `np.memmap` plus a small
+`data/ljspeech_index.npz` of offsets/lengths/ids/split, and converts crops
+to float one batch at a time. Both are covered by the root `.gitignore`'s
+`data/` rule like everything else.
 
 ### `vicuna-7b-lora`'s real 2-epoch run (repo owner's machine)
 
@@ -372,6 +448,26 @@ executions where noted, actually run, not assumed:
   Memorization check: generated samples sit *farther* from the training set
   (mean L2 4.029, min 1.858) than real unseen test digits do (3.611 /
   1.169).
+- `training/rvq-audio-codec` — real build on the RTX 3090 machine against
+  the actual LJSpeech drop at `E:\datasets\LJSpeech-1.1`:
+  `build_ljspeech_dataset.py` verified all 13,100 wavs (22,050 Hz / 16-bit
+  / mono PCM, confirmed by reading the RIFF headers, not assumed) and wrote
+  `data/ljspeech_audio.i16` — 1,898,881,532 samples, **23.92 h**, 3.80 GB —
+  plus the index (12,838 train / 262 val; shortest utterance 1.11 s,
+  longest 10.10 s, mean 6.57 s, so nothing is dropped by the 1.0014 s
+  crop). The model builds at **7,338,658** params (3,659,936 encoder /
+  3,660,162 decoder / 18,560 RVQ) with a 2,112,582-param discriminator, and
+  the full forward/backward path, the 1→8 ladder, the odd-length padding
+  path and the loss stack were shape- and gradient-checked before training.
+  The hand-written WAV writer round-trips through the hand-written parser at
+  the 16-bit quantization floor (max abs error 5.32e-05 against a floor of
+  3.05e-05). A **2-epoch smoke run** (802 steps, discriminator from step 0)
+  trained without NaN, val mel 7.363 → 7.224, and — the number that matters
+  for RVQ — showed **no collapse down the stack**: after 2 epochs the 8th
+  codebook's perplexity (299) was as high as the 1st's (251), unused
+  entries fell across every quantizer, and dead-code revivals dropped from
+  3,087 to 788. Throughput was profiled rather than guessed (see Stage 4).
+  Training figures in the pipeline README's "Verified runs".
 - `fine-tuning/qwen25-3b-lora` — `build_qwen3b_dataset.py`,
   `train_qwen3b_lora.py`, `generate_qwen3b_lora.py`, plus a real 40-sample
   smoke train against the actual downloaded `Qwen/Qwen2.5-3B-Instruct`
@@ -410,6 +506,17 @@ Not executed this pass (no PDFs/poppler set up in this environment):
   reason rectified flow is used in production; or the same objective on
   CIFAR-10 next to `cifar10-vqvae`, where the VAE-blur comparison has more
   room to show itself than at 28x28.
+- `training/rvq-audio-codec` is the repo's first audio pipeline — natural
+  next rungs, in rough order of value: the reconstruction-only A/B
+  (`--lambda-adv 0`) to measure what the discriminator is actually worth;
+  the collapse-mitigation ablations (`--code-dim 128`, `--vq-l2-normalize
+  0`, `--dead-code-threshold 0`, `--vq-mode loss`), whose findings are
+  meant to feed back into `training/cifar10-vqvae`'s single codebook; and
+  then the obvious sequel — an autoregressive prior over the RVQ code
+  indices, which is what turns a codec into an audio LM and is the same
+  "learned prior over discrete codes" rung already planned for
+  `cifar10-vqvae`. Multi-speaker (LibriTTS/VCTK) is the fix for the
+  single-speaker limitation, but only if generalization becomes the goal.
 - `fine-tuning/llava15-full-lora` (planned, not started): the first real VLM
   fine-tune in this repo — image+text pairs, vision encoder/projector
   actually in the training graph, unlike `vicuna-7b-lora`/`qwen25-3b-lora`.

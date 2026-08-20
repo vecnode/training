@@ -1,0 +1,32 @@
+[project]
+name = "rvq-audio-codec"
+version = "0.1.0"
+description = "Neural audio codec with residual vector quantization (SEANet-style conv encoder/decoder, RVQ, multi-scale STFT discriminator written by hand, torch autograd) trained from scratch on LJSpeech"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.26.0",
+  "torch==2.11.0",
+]
+# No neural-codec library (no encodec, no descript-audio-codec, no
+# audiocraft/vocos) and no audio I/O or DSP library either (no torchaudio,
+# no librosa, no soundfile, no scipy): the RIFF/WAV parser and writer, the
+# SEANet encoder/decoder, the residual vector quantizer with its EMA
+# updates and dead-code re-initialization, the mel filterbank, the
+# multi-scale STFT discriminator, and the SI-SDR metric are all written out
+# by hand. torch supplies tensor ops, autograd, conv/STFT primitives and
+# GPU execution - the same role it plays in training/cifar10-vqvae and
+# training/flow-matching-mnist, which likewise write their own model and
+# training loop rather than importing one.
+
+[tool.uv]
+package = false
+
+# Pin torch to the CUDA 12.8 build. Without this, `uv sync` resolves the
+# CPU-only wheel from PyPI and GPU training silently stops working.
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }

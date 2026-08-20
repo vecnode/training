@@ -82,6 +82,38 @@ root covers the whole repo; subfolders don't get their own.
   discretization error, not quality** (an untrained model scores
   near-perfectly on it). No FID by design — it would need a pretrained
   Inception. Details in `ARCHITECTURE.md` Stage 4.
+- **`training/rvq-audio-codec/`** — neural audio codec with residual
+  vector quantization (EnCodec/SoundStream/DAC architecture) trained
+  **from scratch** on LJSpeech; the repo's **first audio pipeline** and the
+  successor of `training/cifar10-vqvae` (one codebook → eight, each
+  quantizing the previous residual). Hand-written torch: RIFF/WAVE parser
+  and writer, SEANet conv encoder/decoder, RVQ, mel filterbank,
+  multi-scale STFT discriminator, SI-SDR — no `encodec`/`descript-audio-
+  codec`/`audiocraft`, no `torchaudio`/`librosa`/`soundfile`/`scipy`, no
+  `DataLoader`. 7,338,658 params (+2,112,582 discriminator, training only);
+  data at `E:\datasets\LJSpeech-1.1` (13,100 wavs, 23.92 h, verified
+  count refuses a partial extraction), stored as a memmapped
+  `data/ljspeech_audio.i16` + index rather than an `.npz`. **Native 22,050
+  Hz, no resampler** → 68.9 frames/s, 5.51 kbps at 8×1024 — don't "fix"
+  these to EnCodec's 24 kHz / 75 Hz / 6 kbps. Quantizer dropout is
+  load-bearing (one model serves the whole 1→8 ladder); the discriminator
+  is staged behind `--adv-start-step` and `--lambda-adv 0` is the
+  recon-only A/B. The dead-code cutoff is a **fraction of uniform codebook
+  usage**, not the absolute 2.0 of EnCodec/`vector-quantize-pytorch` — at
+  32×69 vectors over 1,024 entries uniform usage is only 2.16, and the
+  first smoke run revived 1,023/1,024 entries per codebook before the fix.
+  The discriminator is **~8x the cost of the rest of the step**, so
+  `--disc-bf16 1` (default) autocasts **only the critic** to bf16 (0.95 →
+  2.01 steps/s, 16.8 → 10.8 GiB); never extend that autocast over the
+  generator — codebook lookup and EMA updates must stay fp32.
+  **SI-SDR is a weak proxy for a GAN-trained codec**; judge by the emitted
+  wav pairs and the per-codebook usage table. EMA weights are only better
+  once converged — `evaluate_codec.py` warns when `ema_decay**global_step`
+  still exceeds 1% (the 802-step smoke checkpoint was 45% init and scored
+  worse than the live weights); keep that warning and the checkpoint fields
+  it reads. No FID-equivalent
+  (ViSQOL/PESQ/NISQA all need an external binary or pretrained network) by
+  design. Details in `ARCHITECTURE.md` Stage 4.
 - **An Axolotl-based `fine-tuning/axolotl-ocr-summary/` pipeline existed
   earlier and was removed by the repo owner.** If something similar returns,
   note `axolotl[deepspeed]` only resolves its `uv` environment on Linux/WSL
