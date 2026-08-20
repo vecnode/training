@@ -134,16 +134,19 @@ constraint, not something to patch around silently.
   is deliberately **no FID** (it needs a pretrained Inception, against this
   folder's from-scratch rule) — don't add a substitute score.
 - **Cross-folder references use full relative paths from repo root**, e.g.
-  `serving/vicuna-7b-lora/` reaches its training counterpart via
-  `../../fine-tuning/vicuna-7b-lora/`. When moving or renaming a pipeline
+  `fine-tuning/vicuna-7b-lora/README.md` reaches a sibling pipeline via
+  `../../<stage>/<pipeline>/`. When moving, renaming or removing a pipeline
   folder, grep the whole repo for its old path (READMEs and code comments,
   not just imports — these pipelines don't import each other's code, but do
   reference each other's paths for the adapter/cache directories) before
   considering the move done.
-- **`serving/<pipeline>/` never imports `fine-tuning/<pipeline>/` code** — it
-  only reads that pipeline's trained output directory (adapter or merged
-  model). Keep that boundary; it's what makes serving independently
-  deployable.
+- **`serving/` currently holds no pipelines.** `serving/vicuna-7b-lora/` (a
+  FastAPI service over the Vicuna adapter) was removed by the repo owner,
+  the same way `fine-tuning/axolotl-ocr-summary/` was. If a serving folder
+  returns, keep the boundary the old one had: **`serving/<pipeline>/` never
+  imports `fine-tuning/<pipeline>/` code** — it only reads that pipeline's
+  trained output directory (adapter or merged model), which is what makes
+  serving independently deployable.
 - **Batch/PowerShell scripts** follow the existing style: bootstrap the env
   first (`uv_setup.bat`/`uv_bootstrap.bat`), resolve paths from the script's
   own location rather than assuming a cwd, `exit /b 1` on failure.
