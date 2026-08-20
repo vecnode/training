@@ -310,5 +310,8 @@ the reconstruction test in step 5.
 
 ## Serving
 
-Once trained, serve the adapter with the FastAPI server in
-[`../../serving/vicuna-7b-lora/`](../../serving/vicuna-7b-lora/README.md).
+No serving folder for this pipeline right now —
+`../../serving/vicuna-7b-lora/`, a FastAPI server that loaded the base model
+plus this adapter, was removed by the repo owner. `merge_adapter.py` here
+still produces a standalone merged model, which is what any replacement
+server would load. See [`../../serving/README.md`](../../serving/README.md).

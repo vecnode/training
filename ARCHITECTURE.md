@@ -103,7 +103,8 @@ originally `llava15-lora`.** Two renames, each fixing a real overstatement:
    to `serving/vicuna-7b-lora` in step, with matching model-loading changes
    (functionally required: a Vicuna-7B-trained adapter's parameter names
    don't match `LlavaForConditionalGeneration`'s `language_model.*` prefix,
-   so serving would fail to load it otherwise). A planned `llava15-full-lora`
+   so serving would fail to load it otherwise) — that serving folder has
+   since been removed, see Stage 3. A planned `llava15-full-lora`
    sibling, trained on image+text pairs and actually exercising the vision
    encoder/projector, remains the natural first real VLM fine-tune in this
    repo — that one *should* load the full LLaVA checkpoint. Full reasoning in
@@ -135,9 +136,11 @@ builder logic, same trainer/generator structure, same CLI shape. Two
 verified differences (not assumed): the ChatML prompt wrapper (see table
 above), and no `protobuf`/`sentencepiece` dependency needed (Qwen2.5-3B-Instruct
 ships a ready `tokenizer.json`, unlike Vicuna's raw SentencePiece tokenizer).
-No `serving/qwen25-3b-lora/` yet — `serving/vicuna-7b-lora/` is Vicuna-specific
-(ChatML wrapper differs), so a sibling serving folder would be needed if this
-adapter goes to production.
+No `serving/qwen25-3b-lora/` — `serving/` holds no pipelines at all now (see
+Stage 3), so a serving folder would have to be written from scratch if this
+adapter goes to production. It could not have been shared with the removed
+`serving/vicuna-7b-lora/` in any case: that one was Vicuna-specific, and the
+ChatML wrapper differs.
 
 ### CNN/DailyMail — wired in and verified
 
@@ -186,14 +189,19 @@ not the loss curve. See the
 ## Stage 3 — `serving/`
 
 One `serving/<pipeline>/` folder per fine-tuning pipeline that has a serving
-story. Currently: [`serving/vicuna-7b-lora/`](serving/vicuna-7b-lora/README.md),
-a FastAPI service (`app.py`) that loads the base Vicuna-7B model + trained
-adapter (or a fused/merged model) once and serves a JSON API plus a
-dataset-browser front-end. Deliberately decoupled from
-`fine-tuning/vicuna-7b-lora/` — it only reads the trained adapter directory
-(`../../fine-tuning/vicuna-7b-lora/runs/vicuna7b_lora/final_adapter`), never
-imports its training code. `uv run --directory serving/vicuna-7b-lora python
-app.py --help` verified working.
+story. **Currently empty.** `serving/vicuna-7b-lora/` — a FastAPI service
+(`app.py`) that loaded the base Vicuna-7B model plus the trained adapter (or
+a fused/merged model) once and served a JSON API plus a dataset-browser
+front-end — was removed by the repo owner, the same way
+`fine-tuning/axolotl-ocr-summary/` was.
+
+The design it demonstrated is still the intended shape for this stage, and
+worth restating for whatever returns here: a serving folder is deliberately
+decoupled from its fine-tuning counterpart, reading only that pipeline's
+trained output directory (for Vicuna that was
+`../../fine-tuning/vicuna-7b-lora/runs/vicuna7b_lora/final_adapter`) and
+never importing its training code. That boundary is what makes a serving
+folder independently deployable.
 
 ## Stage 4 — `training/`
 
@@ -371,10 +379,6 @@ executions where noted, actually run, not assumed:
   `q_proj`/`v_proj`) rather than trusting `peft`'s target-module table alone.
 - `fine-tuning/vicuna-7b-lora` — real 2,000-sample/2-epoch training run (see
   above), executed by the repo owner, not just a smoke test.
-- `serving/vicuna-7b-lora` — `app.py --help` (also fixed a `SyntaxWarning`
-  from unescaped backslashes in three docstrings: `app.py`,
-  `merge_adapter.py`, `inspect_weights.py`).
-
 Not executed this pass (no PDFs/poppler set up in this environment):
 
 - `pre-training/exec_1.bat` / `scripts/convert_pdf_to_png.ps1`

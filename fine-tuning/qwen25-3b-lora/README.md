@@ -162,8 +162,10 @@ uv run --directory fine-tuning/qwen25-3b-lora python generate_qwen3b_lora.py --a
 
 ## Serving
 
-No dedicated `serving/qwen25-3b-lora/` folder yet — `serving/vicuna-7b-lora/`
-is Vicuna-specific (its `infer.py` loads `AutoModelForCausalLM` against a
-Vicuna-shaped adapter's config, but the ChatML wrapper differs, same as the
-trainer above). Add a sibling `serving/qwen25-3b-lora/` following the same
-pattern if/when this adapter needs production inference.
+No dedicated `serving/qwen25-3b-lora/` folder — and no serving folder for
+any pipeline at the moment, since `serving/vicuna-7b-lora/` was removed by
+the repo owner. It would not have served this adapter anyway: it was
+Vicuna-specific (its `infer.py` loaded `AutoModelForCausalLM` against a
+Vicuna-shaped adapter's config, and the ChatML wrapper differs, same as the
+trainer above). Add a `serving/qwen25-3b-lora/` if/when this adapter needs
+production inference.
