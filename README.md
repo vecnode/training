@@ -7,6 +7,7 @@ Model Training, Pre-Training and Fine-Tuning workspace, scaling from a single RT
 ## Repository
 
 - [training](./training/)
+    - Train RVQ Audio Codec on [LJSpeech-1.1](https://keithito.com/LJ-Speech-Dataset/) dataset.
     - Train UNet (Flow Matching) on [MNIST](www.kaggle.com/datasets/hojjatk/mnist-dataset) dataset
     - Train TextCNN on [Large Movie Review](https://ai.stanford.edu/~amaas/data/sentiment/) dataset
     - Train VQ-VAE on [CIFAR-10](https://cave.cs.toronto.edu/kriz/cifar.html) dataset
@@ -44,6 +45,10 @@ Text Datasets:
 - [MNIST](www.kaggle.com/datasets/hojjatk/mnist-dataset)
     - The MNIST database of handwritten digits has a training set of 60,000 examples, and a test set of 10,000 examples.
 
+- [LJSpeech-1.1](https://keithito.com/LJ-Speech-Dataset/)
+    - This is a public domain speech dataset consisting of 13,100 short audio clips of a single speaker reading passages from 7 non-fiction books. A transcription is provided for each clip. Clips vary in length from 1 to 10 seconds and have a total length of approximately 24 hours. 
+
+
 <!--
 - [EdinburghNLP/xsum](https://huggingface.co/datasets/EdinburghNLP/xsum)
 - [knkarthick/samsum](https://huggingface.co/datasets/knkarthick/samsum)
@@ -53,6 +58,11 @@ Text Datasets:
 ## Commands
 
 ```sh
+# --- Residual Vector Quantization (RVQ) in audio codec
+uv run --directory training/rvq-audio-codec python build_ljspeech_dataset.py --data-dir "C:\path\to\ljspeech-dataset" --output-dir data
+uv run --directory training/rvq-audio-codec python -u train_codec.py --data-dir data --num-epochs 60 --batch-size 32 --output-dir runs/ljspeech_codec
+uv run --directory training/rvq-audio-codec python -u evaluate_codec.py --data-dir data --checkpoint-path runs/ljspeech_codec/codec_best.pt --output-dir runs/ljspeech_codec
+
 # --- training/flow-matching-mnist
 uv run --directory training/flow-matching-mnist python build_mnist_dataset.py --data-dir "C:\path\to\mnist-dataset" --output-dir data
 uv run --directory training/flow-matching-mnist python train_flow.py --data-path data/mnist.npz --base-channels 32 --num-epochs 40 --batch-size 128 --output-dir runs/mnist_flow
