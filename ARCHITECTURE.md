@@ -13,7 +13,7 @@ rather than by model:
 pre-training/   PDF corpus  -> OCR text, summaries, layout, synthetic QA (CSVs)
 fine-tuning/    text/summary pairs -> trained LoRA adapters
 serving/        trained adapters -> inference (FastAPI)
-training/       reserved for from-scratch / non-LoRA training (not yet built)
+training/       raw datasets -> from-scratch / non-LoRA trained models
 ```
 
 Each leaf folder (`pre-training/`, `fine-tuning/<pipeline>/`,
@@ -197,8 +197,10 @@ app.py --help` verified working.
 
 ## Stage 4 — `training/`
 
-Reserved for from-scratch / non-LoRA training of other models, as distinct
-from adapting an existing checkpoint (`fine-tuning/`).
+From-scratch / non-LoRA training of other models, as distinct from
+adapting an existing checkpoint (`fine-tuning/`). Six pipelines so far,
+each an independent `uv` project and each writing out by hand whatever the
+usual library would hide.
 
 [`training/adult-income-logreg/`](training/adult-income-logreg/README.md) is
 the first pipeline here: logistic regression on the UCI
@@ -241,7 +243,7 @@ VAE comparison is reproducible; measured numbers in the pipeline README's
 "Verified runs".
 
 [`training/imdb-sentiment-cnn/`](training/imdb-sentiment-cnn/README.md)
-is the newest pipeline here: a Text CNN
+is the text-classification pipeline here: a Text CNN
 ([Kim, 2014](https://arxiv.org/abs/1408.5882)) trained **from scratch** on
 the [Large Movie Review Dataset](https://ai.stanford.edu/~amaas/data/sentiment/)
 (25k train / 25k test binary sentiment; raw review `.txt` files at
@@ -259,6 +261,54 @@ published CNN-rand (82.7%), which the README attributes to full-length
 reviews plus val-based early stopping. A dropout-0.7 variant scored 87.9%
 on test and was discarded. Full numbers in the pipeline README's
 "Verified runs".
+
+[`training/flow-matching-mnist/`](training/flow-matching-mnist/README.md)
+is the newest pipeline here, and the first *generative* model family in
+this repo that is not an autoencoder: flow matching / rectified flow
+trained **from scratch** on MNIST. The model learns a velocity field
+`v(x,t)` whose ODE transports `N(0,I)` at `t=0` into the data at `t=1`;
+training regresses that velocity on straight-line conditional paths with
+plain MSE — `x_t = (1-(1-sigma_min)*t)*x0 + t*x1`, target `x1 -
+(1-sigma_min)*x0` — which is Lipman et al.'s conditional-OT path
+([2210.02747](https://arxiv.org/abs/2210.02747)) and, at the default
+`--sigma-min 0.0`, exactly the rectified flow of Liu et al.
+([2209.03003](https://arxiv.org/abs/2209.03003)). **There is no noise
+schedule, no variance parameterization, and no ELBO** — that absence is the
+point, and it is the difference between this and a DDPM. Same hand-written
+philosophy as the rest of `training/`: the UNet velocity field (three
+resolutions, one 7x7 self-attention block, sinusoidal time embedding as a
+per-channel bias), the EMA, and the Euler/Heun ODE samplers are all plain
+`torch.nn`; no `diffusers`/`torchcfm`/`torchdiffeq`/`torchvision`, no
+`DataLoader`, numpy-permutation batching. ~1.18M params, **40 epochs in
+~5.3 min** on a single RTX 3090.
+
+It is the deliberate counterpart to [`training/mnist-vae`](training/mnist-vae/README.md):
+same dataset, same `data/mnist.npz` contract, same hand-written zlib PNG
+writer, so the two prior-sample grids are directly comparable — the flow
+model's are visibly sharper, the VAE's blur being the Gaussian-posterior
+averaging that `cifar10-vqvae` also exists to remove. That comparison is
+model-family vs model-family, **not** a controlled ablation: 1,175,841
+params of UNet against 370,945 of plain conv encoder/decoder, and the two
+runs cannot separate objective from capacity. The honest cost difference
+they do show: the VAE generates in one forward pass, the flow model needs
+20–50 network evaluations.
+
+Judging it needed care, and two of this pipeline's guardrails came from
+getting it wrong first. (1) The evaluator's round-trip MAE/PSNR sweep
+measures **ODE discretization error, not sample quality** — the ODE is
+time-reversible, so a real digit can be integrated back to noise and
+forward again, but a near-zero velocity field round-trips perfectly since
+the identity is its own inverse; a 2-epoch smoke run really did post a
+better round-trip PSNR than the converged model. The sweep's actual use is
+choosing `--num-steps`, and it shows Heun winning per *network evaluation*,
+not just per step (10 Heun steps beat 50 Euler steps by ~2 dB at the same
+100 evals). (2) The nearest-neighbour memorization check reports a distance
+that is meaningless without a scale, so real held-out test digits are
+measured against the training set the same way as a control. There is
+deliberately **no FID** — it would require a pretrained Inception network,
+against this folder's from-scratch rule, and a substitute number would be
+worse than none. Measured figures in the pipeline README's "Verified runs".
+
 
 ## Datasets
 
@@ -297,6 +347,23 @@ executions where noted, actually run, not assumed:
   predecessor VAE's best (PSNR 21.5 dB, SSIM 0.742, HF 51.4%), i.e. the
   discrete-codebook family removes the plain-VAE blur mechanism. Full
   numbers in the pipeline README's "Verified runs".
+- `training/flow-matching-mnist` — real run on the RTX 3090 against the
+  actual MNIST IDX files at `E:\datasets\mnist-dataset`:
+  `build_mnist_dataset.py` wrote `data/mnist.npz` (60k train / 10k test);
+  `train_flow.py` trained 1,175,841 params for 40 epochs in **317.5 s**
+  (val velocity MSE 0.2263 → **0.1704**, best at epoch 38 — train and val
+  track each other throughout, no overfitting); `evaluate_flow.py` scored
+  **0.1687** velocity MSE on the held-out 10k and wrote all three PNGs.
+  Reproduced in a second independent run of the same commands (312.1 s,
+  best val 0.1705, test 0.1687) — expect the third decimal to move.
+  Samples are clean, readable digits with a handful of malformed glyphs per
+  64. The ~0.17 loss floor is expected, not a defect: `u = x1 - x0` is
+  irreducibly random given `(x_t, t)`, so the MSE floors at that
+  conditional variance and can never reach zero — judge the samples, the
+  same lesson `fine-tuning/vicuna-7b-lora` taught about loss plateaus.
+  Memorization check: generated samples sit *farther* from the training set
+  (mean L2 4.029, min 1.858) than real unseen test digits do (3.611 /
+  1.169).
 - `fine-tuning/qwen25-3b-lora` — `build_qwen3b_dataset.py`,
   `train_qwen3b_lora.py`, `generate_qwen3b_lora.py`, plus a real 40-sample
   smoke train against the actual downloaded `Qwen/Qwen2.5-3B-Instruct`
@@ -330,6 +397,15 @@ Not executed this pass (no PDFs/poppler set up in this environment):
   (~+1–3 pts expected), or the bigger from-scratch projects that use the
   50k unlabeled reviews (AWD-LSTM LM-pretrain + fine-tune, or a small
   transformer with MLM pretraining, both ~91% territory).
+- `training/flow-matching-mnist` is verified at ~5.3 min for 40 epochs and
+  was still improving when it stopped — natural next rungs: more epochs or
+  a wider `--base-channels`; class-conditioning plus classifier-free
+  guidance (the smallest real upgrade, and what makes samples steerable); a
+  second rectification pass (re-train on the model's own noise/sample
+  pairs) to straighten the paths for 1–4-step sampling, which is the whole
+  reason rectified flow is used in production; or the same objective on
+  CIFAR-10 next to `cifar10-vqvae`, where the VAE-blur comparison has more
+  room to show itself than at 28x28.
 - `fine-tuning/llava15-full-lora` (planned, not started): the first real VLM
   fine-tune in this repo — image+text pairs, vision encoder/projector
   actually in the training graph, unlike `vicuna-7b-lora`/`qwen25-3b-lora`.

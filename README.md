@@ -7,6 +7,7 @@ Model Training, Pre-Training and Fine-Tuning workspace, scaling from a single RT
 ## Repository
 
 - [training](./training/)
+    - Train UNet (Flow Matching) on [MNIST](www.kaggle.com/datasets/hojjatk/mnist-dataset) dataset
     - Train TextCNN on [Large Movie Review](https://ai.stanford.edu/~amaas/data/sentiment/) dataset
     - Train VQ-VAE on [CIFAR-10](https://cave.cs.toronto.edu/kriz/cifar.html) dataset
     - Train VAE on [MNIST](www.kaggle.com/datasets/hojjatk/mnist-dataset) dataset
@@ -40,6 +41,8 @@ Text Datasets:
     - tabular classification - Predict whether annual income of an individual exceeds $50K/yr based on census data. Also known as "Census Income" dataset. 
     - DOI: 10.24432/C5XW20
 
+- [MNIST](www.kaggle.com/datasets/hojjatk/mnist-dataset)
+    - The MNIST database of handwritten digits has a training set of 60,000 examples, and a test set of 10,000 examples.
 
 <!--
 - [EdinburghNLP/xsum](https://huggingface.co/datasets/EdinburghNLP/xsum)
@@ -50,6 +53,11 @@ Text Datasets:
 ## Commands
 
 ```sh
+# --- training/flow-matching-mnist
+uv run --directory training/flow-matching-mnist python build_mnist_dataset.py --data-dir "C:\path\to\mnist-dataset" --output-dir data
+uv run --directory training/flow-matching-mnist python train_flow.py --data-path data/mnist.npz --base-channels 32 --num-epochs 40 --batch-size 128 --output-dir runs/mnist_flow
+uv run --directory training/flow-matching-mnist python evaluate_flow.py --data-path data/mnist.npz --checkpoint-path runs/mnist_flow/flow_best.pt --num-steps 50 --output-dir runs/mnist_flow
+
 # --- training/cifar10-vqvae: custom VQ-VAE from scratch (torch autograd, EMA codebook) on CIFAR-10 ---
 uv run --directory training/cifar10-vqvae python build_cifar10_dataset.py --data-dir "C:\path\to\cifar-10-python" --output-dir data
 uv run --directory training/cifar10-vqvae python train_vqvae.py --data-path data/cifar10.npz --codebook-size 512 --embedding-dim 64 --commitment-beta 0.25 --num-epochs 100 --batch-size 128 --output-dir runs/cifar10_vqvae
