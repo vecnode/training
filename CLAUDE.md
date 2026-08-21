@@ -91,8 +91,8 @@ root covers the whole repo; subfolders don't get their own.
   multi-scale STFT discriminator, SI-SDR — no `encodec`/`descript-audio-
   codec`/`audiocraft`, no `torchaudio`/`librosa`/`soundfile`/`scipy`, no
   `DataLoader`. 7,338,658 params (+2,112,582 discriminator, training only);
-  data at `E:\datasets\LJSpeech-1.1` (13,100 wavs, 23.92 h, verified
-  count refuses a partial extraction), stored as a memmapped
+  `--data-dir` points at an extracted LJSpeech-1.1 (13,100 wavs, 23.92 h,
+  verified count refuses a partial extraction), stored as a memmapped
   `data/ljspeech_audio.i16` + index rather than an `.npz`. **Native 22,050
   Hz, no resampler** → 68.9 frames/s, 5.51 kbps at 8×1024 — don't "fix"
   these to EnCodec's 24 kHz / 75 Hz / 6 kbps. Quantizer dropout is
@@ -113,7 +113,13 @@ root covers the whole repo; subfolders don't get their own.
   worse than the live weights); keep that warning and the checkpoint fields
   it reads. No FID-equivalent
   (ViSQOL/PESQ/NISQA all need an external binary or pretrained network) by
-  design. Details in `ARCHITECTURE.md` Stage 4.
+  design. **Trained for real**: 60 epochs / 24,060 steps in 2 h 54 min, val
+  mel 7.313 → 3.075, a monotone 1→8 ladder (5.51 kbps: +1.81 dB SI-SDR,
+  3.083 mel) and **100% codebook usage on all eight** with the deepest
+  codebook the highest-perplexity of the stack. It sounds like a working
+  codec with an audible metallic edge, not a transparent one. Don't re-run
+  training to chase better numbers unless asked — those results are the
+  record. Details in `ARCHITECTURE.md` Stage 4.
 - **An Axolotl-based `fine-tuning/axolotl-ocr-summary/` pipeline existed
   earlier and was removed by the repo owner.** If something similar returns,
   note `axolotl[deepspeed]` only resolves its `uv` environment on Linux/WSL

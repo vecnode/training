@@ -203,8 +203,7 @@ bottleneck is not algorithm selection.
 single-speaker (Linda Johnson) LibriVox readings, 22,050 Hz / 16-bit / mono
 PCM, **23.92 hours**. Point `--data-dir` at the extracted folder; a nested
 `LJSpeech-1.1/` subfolder is also accepted. Not checked into this repo
-(`data/` is gitignored via the root `.gitignore`). On the repo owner's
-machine: `E:\datasets\LJSpeech-1.1`.
+(`data/` is gitignored via the root `.gitignore`).
 
 The transcripts in `metadata.csv` are deliberately **unused** — a codec is
 trained by self-supervised reconstruction and never sees text.
@@ -243,7 +242,7 @@ natively 24 kHz), VCTK (110 speakers), and MUSDB18 or FMA for music;
 ## Commands
 
 ```sh
-uv run --directory training/rvq-audio-codec python build_ljspeech_dataset.py --data-dir "E:\datasets\LJSpeech-1.1" --output-dir data
+uv run --directory training/rvq-audio-codec python build_ljspeech_dataset.py --data-dir "C:\path	o\LJSpeech-1.1" --output-dir data
 uv run --directory training/rvq-audio-codec python -u train_codec.py --data-dir data --num-quantizers 8 --codebook-size 1024 --num-epochs 60 --batch-size 32 --output-dir runs/ljspeech_codec
 uv run --directory training/rvq-audio-codec python -u evaluate_codec.py --data-dir data --checkpoint-path runs/ljspeech_codec/codec_best.pt --output-dir runs/ljspeech_codec
 ```
@@ -346,56 +345,72 @@ floor of 3.05e-05), clipping clamps rather than wraps, SI-SDR is
 scale-invariant (116.4 dB for x vs x, 122.5 dB for 2x vs x), and
 `log_stft_distance(x, x)` is exactly 0.
 
-**2-epoch smoke run** (802 steps, discriminator from step 0, fp32):
+**2-epoch smoke run** (802 steps, discriminator from step 0, fp32) — kept
+only as a note that the very first checkpoint already showed no collapse
+down the stack (8th codebook perplexity 299 against the 1st's 251) and that
+dead-code revivals were already falling, 3,087 -> 788. Superseded by the
+full run below.
 
-```
-epoch 1/2  time=0.0421 mel=8.510 commit=38.69 adv=2.357 feat=0.377 d=0.932 | val mel=7.363
-    codebook perplexity per q: 286 155 167 258 153 199 206 253
-    unused entries per q:      437 576 507 447 578 508 526 495   revived: 3087
-epoch 2/2  time=0.0434 mel=7.352 commit=79.70 adv=2.901 feat=0.290 d=0.565 | val mel=7.224
-    codebook perplexity per q: 251 252 244 265 227 278 222 299
-    unused entries per q:      375 404 447 410 468 389 444 364   revived: 788
-```
+**60-epoch run** — 24,060 steps in **2 h 54 min** on a single RTX 3090,
+10.8 GiB peak. Epochs 1-12 are reconstruction-only at ~53 s each (7.6
+steps/s); from epoch 13 the discriminator is active and epochs cost ~206 s
+(1.95 steps/s). Validation mel fell **7.313 -> 3.075** and was still
+improving at the end.
 
-No NaN, both optimizers stepping, val mel falling. The codebook columns are
-the ones that matter and they are healthy: unused entries dropping across
-every quantizer, revivals falling 3,087 -> 788, and **the 8th codebook is as
-busy as the 1st** (perplexity 299 vs 251) — no collapse down the stack,
-which is the whole risk with RVQ.
-
-**bf16 discriminator, 1 epoch** (401 steps) — the same epoch in fp32 and in
-bf16, to check the speedup costs nothing:
+The bf16 critic costs nothing in quality. Same first epoch, both precisions:
 
 | | fp32 | bf16 critic |
 |---|---|---|
 | train mel | 8.510 | 8.516 |
-| **val mel** | 7.363 | **7.287** |
-| commitment | 38.69 | 33.55 |
+| val mel | 7.363 | 7.287 |
 | epoch wall time | 435.8 s | **212.6 s** |
 | peak GPU memory | 16.78 GiB | **10.78 GiB** |
 
-Indistinguishable on loss (the val difference is noise), half the time, two
-thirds the memory. The reported peak of 10.78 GiB matches the benchmark's
-10.80 GiB, so a 60-epoch run fits with ~13 GiB of headroom on a 24 GB card.
+**The bitrate ladder**, 64 held-out utterances (398.5 s), all four rungs
+served by the same model:
 
-**Evaluator, end-to-end on that 2-epoch checkpoint** (16 held-out
-utterances, 119.2 s) — run to prove the path works, *not* as a quality
-result; a 2-epoch codec sounds like noise:
+| n_q | kbps | SI-SDR | mel | log-STFT |
+|---|---|---|---|---|
+| 1 | 0.69 | -4.84 dB | 3.968 | 0.9993 |
+| 2 | 1.38 | -0.87 dB | 3.528 | 0.9689 |
+| 4 | 2.76 | +0.86 dB | 3.249 | 0.9506 |
+| 8 | 5.51 | **+1.81 dB** | **3.083** | **0.9398** |
 
-```
-  n_q   kbps    SI-SDR      mel     log-STFT      <- live weights (--use-ema 0)
-    1   0.69   -43.08 dB    7.713     1.7948
-    2   1.38   -44.22 dB    7.533     1.7479
-    4   2.76   -42.14 dB    7.425     1.6927
-    8   5.51   -41.02 dB    7.422     1.6824
-```
+Monotone on all three metrics, which is the shape quantizer dropout exists
+to produce: one model, four working bitrates.
 
-The ladder is already monotone on both mel and log-STFT after two epochs,
-which is the shape it should have. All eleven artifacts wrote correctly
-(four `recon_nq*` wavs per utterance, the originals, and
-`spectrogram_grid.png`).
+**Codebook usage — no collapse anywhere in the stack:**
 
-_Pending: the full 60-epoch run and its evaluation ladder._
+| q | entries used | % | perplexity |
+|---|---|---|---|
+| 1 | 1024 | 100.0 | 792.0 |
+| 2 | 1024 | 100.0 | 833.6 |
+| 3 | 1024 | 100.0 | 790.3 |
+| 4 | 1024 | 100.0 | 840.5 |
+| 5 | 1024 | 100.0 | 881.7 |
+| 6 | 1024 | 100.0 | 894.4 |
+| 7 | 1024 | 100.0 | 843.5 |
+| 8 | 1024 | 100.0 | **903.6** |
+
+**Every entry of every codebook is used**, and the *deepest* codebook has
+the highest perplexity of all eight (903.6 of a possible 1024). This is the
+headline result for the four mitigations: a naive RVQ typically leaves the
+last codebooks nearly dead. Dead-code revival did its work early and then
+retired itself — 6,072 revivals in epoch 1, 205 by epoch 3, and **zero from
+epoch 7 onward**.
+
+**How it actually sounds.** The repo owner's verdict on the emitted wavs:
+*it works, a bit metallic*. That is the expected artifact, and the numbers
+say why: **+1.81 dB SI-SDR** at full rate is very low, meaning
+waveform phase is only loosely tracked. `spectrogram_grid.png` shows the
+same thing — harmonics and formants are reproduced closely, while the
+stochastic high-frequency texture of fricatives and breath comes back
+smoother and more tonal than the original. That trade is exactly what the
+adversarial loss buys: perceptual plausibility over sample-exact phase. The
+honest read is a *working* codec with artifacts, not a transparent one;
+closing that gap is a training-budget problem (EnCodec and DAC train for
+several hundred thousand steps against this run's 24,060), not an
+architecture problem.
 
 ## Compared with `training/cifar10-vqvae`
 

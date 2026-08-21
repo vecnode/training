@@ -144,8 +144,9 @@ constraint, not something to patch around silently.
   `audiocraft`, no `torchaudio`/`librosa`/`soundfile`/`scipy`, no
   `DataLoader` (numpy-permutation batching over utterance indices, one
   random crop each). 7,338,658 params plus a 2,112,582-param discriminator
-  used only in training. Data at `E:\datasets\LJSpeech-1.1` (a nested
-  `LJSpeech-1.1/` subfolder is also accepted); `build_ljspeech_dataset.py`
+  used only in training. `--data-dir` points at an extracted LJSpeech-1.1
+  (a nested `LJSpeech-1.1/` subfolder is also accepted);
+  `build_ljspeech_dataset.py`
   verifies exactly 13,100 wavs and refuses a partial extraction, and writes
   a memmapped `data/ljspeech_audio.i16` + `data/ljspeech_index.npz` rather
   than an `.npz` of samples — 3.8 GB of int16 becomes 7.6 GB as float32 and
@@ -191,7 +192,14 @@ constraint, not something to patch around silently.
     keeps FID out of `flow-matching-mnist` — don't add a substitute score.
   It is the deliberate successor of `training/cifar10-vqvae` (one codebook
   → eight; full-latent L2 lookup → 8-dim factorized cosine lookup), and its
-  collapse-mitigation findings are meant to transfer back there.
+  collapse-mitigation findings are meant to transfer back there — the
+  60-epoch run ended with **all 1,024 entries of all eight codebooks in
+  use**, the deepest codebook carrying the highest perplexity of the stack
+  (903.6 vs the first's 792.0). **Don't re-run training to "improve" the
+  numbers without being asked**: the run cost 2 h 54 min and the repo owner
+  has said it is finished. Its measured results are pinned in the pipeline
+  README's "Verified runs" and in `ARCHITECTURE.md`; treat them as the
+  record.
 
 - **Cross-folder references use full relative paths from repo root**, e.g.
   `fine-tuning/vicuna-7b-lora/README.md` reaches a sibling pipeline via

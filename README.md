@@ -2,12 +2,12 @@
 
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue) ![License: MIT](https://img.shields.io/badge/license-MIT-blue)
 
-Model Training, Pre-Training and Fine-Tuning workspace, scaling from a single RTX 3090 (24GB) up to multi-GPU.
+Model Training, Pre-Training and Fine-Tuning workspace, scaling from a single RTX 3090 (24GB).
 
 ## Repository
 
 - [training](./training/)
-    - Train RVQ Audio Codec on [LJSpeech-1.1](https://keithito.com/LJ-Speech-Dataset/) dataset.
+    - Train RVQ Audio Codec on [LJSpeech-1.1](https://keithito.com/LJ-Speech-Dataset/) dataset
     - Train UNet (Flow Matching) on [MNIST](www.kaggle.com/datasets/hojjatk/mnist-dataset) dataset
     - Train TextCNN on [Large Movie Review](https://ai.stanford.edu/~amaas/data/sentiment/) dataset
     - Train VQ-VAE on [CIFAR-10](https://cave.cs.toronto.edu/kriz/cifar.html) dataset

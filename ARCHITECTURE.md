@@ -321,7 +321,7 @@ worse than none. Measured figures in the pipeline README's "Verified runs".
 newest pipeline here, and the **first audio pipeline in the repo**: a
 neural audio codec with residual vector quantization (the
 EnCodec/SoundStream/DAC architecture) trained **from scratch** on LJSpeech
-(13,100 wavs at `E:\datasets\LJSpeech-1.1`, 23.92 h, parsed by a
+(13,100 wavs, 23.92 h, parsed by a
 hand-written RIFF/WAVE chunk walker - no torchaudio, no soundfile, no
 librosa, no scipy). A SEANet-style strided conv encoder maps the waveform
 to 68.9 frames/s, a stack of 8 codebooks x 1,024 entries quantizes each
@@ -448,26 +448,33 @@ executions where noted, actually run, not assumed:
   Memorization check: generated samples sit *farther* from the training set
   (mean L2 4.029, min 1.858) than real unseen test digits do (3.611 /
   1.169).
-- `training/rvq-audio-codec` — real build on the RTX 3090 machine against
-  the actual LJSpeech drop at `E:\datasets\LJSpeech-1.1`:
-  `build_ljspeech_dataset.py` verified all 13,100 wavs (22,050 Hz / 16-bit
-  / mono PCM, confirmed by reading the RIFF headers, not assumed) and wrote
-  `data/ljspeech_audio.i16` — 1,898,881,532 samples, **23.92 h**, 3.80 GB —
-  plus the index (12,838 train / 262 val; shortest utterance 1.11 s,
-  longest 10.10 s, mean 6.57 s, so nothing is dropped by the 1.0014 s
-  crop). The model builds at **7,338,658** params (3,659,936 encoder /
-  3,660,162 decoder / 18,560 RVQ) with a 2,112,582-param discriminator, and
-  the full forward/backward path, the 1→8 ladder, the odd-length padding
-  path and the loss stack were shape- and gradient-checked before training.
-  The hand-written WAV writer round-trips through the hand-written parser at
-  the 16-bit quantization floor (max abs error 5.32e-05 against a floor of
-  3.05e-05). A **2-epoch smoke run** (802 steps, discriminator from step 0)
-  trained without NaN, val mel 7.363 → 7.224, and — the number that matters
-  for RVQ — showed **no collapse down the stack**: after 2 epochs the 8th
-  codebook's perplexity (299) was as high as the 1st's (251), unused
-  entries fell across every quantizer, and dead-code revivals dropped from
-  3,087 to 788. Throughput was profiled rather than guessed (see Stage 4).
-  Training figures in the pipeline README's "Verified runs".
+- `training/rvq-audio-codec` — **full 60-epoch run on the RTX 3090**
+  against the real LJSpeech drop. `build_ljspeech_dataset.py` verified all
+  13,100 wavs (22,050 Hz / 16-bit / mono PCM, confirmed by reading the RIFF
+  headers, not assumed) and wrote `data/ljspeech_audio.i16` —
+  1,898,881,532 samples, **23.92 h**, 3.80 GB — plus the index (12,838
+  train / 262 val; shortest utterance 1.11 s, so nothing is dropped by the
+  1.0014 s crop). The model is **7,338,658** params (3,659,936 encoder /
+  3,660,162 decoder / 18,560 RVQ) plus a 2,112,582-param discriminator.
+  Training took **2 h 54 min** for 24,060 steps at 10.8 GiB peak, and
+  validation mel fell **7.313 → 3.075**, still improving at the end.
+  Evaluated on 64 held-out utterances (398.5 s), the bitrate ladder is
+  monotone on all three metrics — 0.69 kbps: −4.84 dB SI-SDR / 3.968 mel;
+  1.38: −0.87 / 3.528; 2.76: +0.86 / 3.249; **5.51 kbps: +1.81 dB / 3.083
+  mel** — all four rungs served by the same model, which is what quantizer
+  dropout is for. The headline result is the codebooks: **all 1,024 entries
+  of all eight are used**, and the *deepest* codebook has the highest
+  perplexity of the stack (903.6, against the first's 792.0). A naive RVQ
+  usually leaves the last codebooks nearly dead; dead-code revival did its
+  work early (6,072 revivals in epoch 1, 205 by epoch 3) and then went
+  silent from epoch 7 on. Judged by ear it is a *working* codec with an
+  audible metallic edge, not a transparent one — the very low SI-SDR says
+  waveform phase is only loosely tracked, which is the trade the adversarial
+  loss makes. Supporting checks: the hand-written WAV writer round-trips
+  through the hand-written parser at the 16-bit quantization floor
+  (5.32e-05 against a floor of 3.05e-05), and throughput was profiled rather
+  than guessed (see Stage 4). Full tables in the pipeline README's
+  "Verified runs".
 - `fine-tuning/qwen25-3b-lora` — `build_qwen3b_dataset.py`,
   `train_qwen3b_lora.py`, `generate_qwen3b_lora.py`, plus a real 40-sample
   smoke train against the actual downloaded `Qwen/Qwen2.5-3B-Instruct`
@@ -506,7 +513,11 @@ Not executed this pass (no PDFs/poppler set up in this environment):
   reason rectified flow is used in production; or the same objective on
   CIFAR-10 next to `cifar10-vqvae`, where the VAE-blur comparison has more
   room to show itself than at 28x28.
-- `training/rvq-audio-codec` is the repo's first audio pipeline — natural
+- `training/rvq-audio-codec` is trained and verified (see above) — the
+  audible gap left is the metallic edge, which the very low SI-SDR
+  (+1.81 dB) identifies as loose phase tracking, and which is a
+  training-budget problem rather than an architecture one: EnCodec and DAC
+  run several hundred thousand steps against this run's 24,060. Natural
   next rungs, in rough order of value: the reconstruction-only A/B
   (`--lambda-adv 0`) to measure what the discriminator is actually worth;
   the collapse-mitigation ablations (`--code-dim 128`, `--vq-l2-normalize
