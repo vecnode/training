@@ -112,12 +112,12 @@ flags precisely so they can be tested rather than assumed.
 Point `--data-dir` at a local folder containing the raw MNIST IDX files
 (same format/paths as `training/mnist-kmeans` and `training/mnist-vae`) -
 not checked into this repo (`data/` is gitignored via the root
-`.gitignore`). On the repo owner's machine: `E:\datasets\mnist-dataset`.
+`.gitignore`).
 
 ## Commands
 
 ```sh
-uv run --directory training/flow-matching-mnist python build_mnist_dataset.py --data-dir "E:\datasets\mnist-dataset" --output-dir data
+uv run --directory training/flow-matching-mnist python build_mnist_dataset.py --data-dir "C:\path\to\mnist-dataset" --output-dir data
 uv run --directory training/flow-matching-mnist python train_flow.py --data-path data/mnist.npz --base-channels 32 --num-epochs 40 --batch-size 128 --output-dir runs/mnist_flow
 uv run --directory training/flow-matching-mnist python evaluate_flow.py --data-path data/mnist.npz --checkpoint-path runs/mnist_flow/flow_best.pt --num-steps 50 --output-dir runs/mnist_flow
 ```

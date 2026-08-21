@@ -9,7 +9,7 @@ the stdlib struct module.
 
 Usage:
     uv run --directory training/mnist-kmeans python build_mnist_dataset.py \
-        --data-dir "C:\\Users\\luisarandas\\Desktop\\mnist-dataset" \
+        --data-dir "C:\\path\\to\\mnist-dataset" \
         --output-dir data
 """
 

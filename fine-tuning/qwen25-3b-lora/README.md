@@ -50,7 +50,7 @@ different `target_modules` to LoRA correctly; that one wasn't built here.
 (config `3.0.0`), a public, no-setup-required news-summarization dataset.
 
 **Where the dataset lives:** downloaded locally to
-`C:\Users\luisarandas\Desktop\cnn_dailymail\3.0.0\` (outside this repo, and
+`C:\path\to\cnn_dailymail\3.0.0\` (outside this repo, and
 outside the root folder — not committed, not moved). Point `--cnn-dailymail-dir`
 at wherever you keep it; nothing in this pipeline assumes a fixed location.
 
@@ -89,7 +89,7 @@ Installs project dependencies (`transformers`, `peft`, `accelerate`,
 ## 2) Build JSONL dataset
 
 ```bash
-uv run --directory fine-tuning/qwen25-3b-lora python build_qwen3b_dataset.py --cnn-dailymail-dir "C:\Users\luisarandas\Desktop\cnn_dailymail\3.0.0" --cnn-dailymail-split train --max-samples 2000
+uv run --directory fine-tuning/qwen25-3b-lora python build_qwen3b_dataset.py --cnn-dailymail-dir "C:\path\to\cnn_dailymail\3.0.0" --cnn-dailymail-split train --max-samples 2000
 ```
 
 Output is `data/qwen3b_train.jsonl`. Training consumes the `text` and

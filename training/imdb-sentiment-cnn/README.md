@@ -27,7 +27,7 @@ from the 25k labeled reviews.
 ```sh
 # build (data dir accepts the aclImdb/ folder or a parent containing it)
 uv run --directory training/imdb-sentiment-cnn python build_imdb_dataset.py \
-    --data-dir "E:\datasets\aclImdb_v1" --output-dir data
+    --data-dir "C:\path\to\aclImdb_v1" --output-dir data
 
 # train (~5.2M params, random embeddings)
 uv run --directory training/imdb-sentiment-cnn python train_cnn.py \

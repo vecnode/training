@@ -17,7 +17,7 @@ pipeline folder's code.
 
 Usage:
     uv run --directory training/cifar10-vae python build_cifar10_dataset.py \
-        --data-dir "E:\\datasets\\cifar-10-python" \
+        --data-dir "C:\\path\\to\\cifar-10-python" \
         --output-dir data
 """
 
@@ -73,7 +73,7 @@ def load_meta(batch_dir):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--data-dir", default=r"E:\datasets\cifar-10-python",
+        "--data-dir", default=r"C:\path\to\cifar-10-python",
         help="Directory containing the raw CIFAR-10 python-format pickle "
              "files (a cifar-10-batches-py subfolder is also accepted).",
     )

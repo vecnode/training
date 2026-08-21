@@ -242,7 +242,7 @@ natively 24 kHz), VCTK (110 speakers), and MUSDB18 or FMA for music;
 ## Commands
 
 ```sh
-uv run --directory training/rvq-audio-codec python build_ljspeech_dataset.py --data-dir "C:\path	o\LJSpeech-1.1" --output-dir data
+uv run --directory training/rvq-audio-codec python build_ljspeech_dataset.py --data-dir "C:\path\to\LJSpeech-1.1" --output-dir data
 uv run --directory training/rvq-audio-codec python -u train_codec.py --data-dir data --num-quantizers 8 --codebook-size 1024 --num-epochs 60 --batch-size 32 --output-dir runs/ljspeech_codec
 uv run --directory training/rvq-audio-codec python -u evaluate_codec.py --data-dir data --checkpoint-path runs/ljspeech_codec/codec_best.pt --output-dir runs/ljspeech_codec
 ```

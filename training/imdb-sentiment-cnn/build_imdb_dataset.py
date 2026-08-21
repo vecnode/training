@@ -20,7 +20,7 @@ design.
 
 Usage:
     uv run --directory training/imdb-sentiment-cnn python build_imdb_dataset.py \
-        --data-dir "E:\\datasets\\aclImdb_v1" \
+        --data-dir "C:\\path\\to\\aclImdb_v1" \
         --output-dir data
 """
 
@@ -106,7 +106,7 @@ def encode(docs, word_to_id, max_len):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--data-dir", default=r"E:\datasets\aclImdb_v1",
+        "--data-dir", default=r"C:\path\to\aclImdb_v1",
         help="Directory containing the extracted aclImdb reviews (an "
              "aclImdb subfolder is also accepted).",
     )

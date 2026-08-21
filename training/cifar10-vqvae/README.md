@@ -54,8 +54,7 @@ indices.
 
 Point `--data-dir` at a local folder with the raw CIFAR-10 python-format
 pickle files (`data_batch_1..5`, `test_batch`, `batches.meta`); a
-`cifar-10-batches-py` subfolder is also accepted. On this machine:
-`E:\datasets\cifar-10-python` (the default). The pickles are parsed by
+`cifar-10-batches-py` subfolder is also accepted. The pickles are parsed by
 hand with stdlib `pickle` (`encoding='bytes'`, Python-2 format) - no
 torchvision, no `keras.datasets` - the same "raw bytes by hand" spirit as
 the MNIST IDX parsing in `training/mnist-*`. Data is not checked into this
@@ -64,7 +63,7 @@ repo (`data/` is gitignored via the root `.gitignore`).
 ## Commands
 
 ```sh
-uv run --directory training/cifar10-vqvae python build_cifar10_dataset.py --data-dir "E:\datasets\cifar-10-python" --output-dir data
+uv run --directory training/cifar10-vqvae python build_cifar10_dataset.py --data-dir "C:\path\to\cifar-10-python" --output-dir data
 uv run --directory training/cifar10-vqvae python train_vqvae.py --data-path data/cifar10.npz --codebook-size 512 --embedding-dim 64 --commitment-beta 0.25 --num-epochs 100 --batch-size 128 --output-dir runs/cifar10_vqvae
 uv run --directory training/cifar10-vqvae python evaluate_vqvae.py --data-path data/cifar10.npz --checkpoint-path runs/cifar10_vqvae/vqvae_best.pt --output-dir runs/cifar10_vqvae
 ```

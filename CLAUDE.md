@@ -63,7 +63,7 @@ root covers the whole repo; subfolders don't get their own.
   embeddings. `build_imdb_dataset.py` verifies exactly 12,500 files per
   split (refuses a partial extraction; the dataset was once caught
   mid-extraction) and accepts a nested `aclImdb/` subfolder; data at
-  `E:\datasets\aclImdb_v1`. Verified real run: **89.2%** test acc, 20
+  a nested `aclImdb/` subfolder. Verified real run: **89.2%** test acc, 20
   epochs in ~31 s on the RTX 3090; dropout 0.5, best checkpoint by val acc
   (peaks ~epoch 3, then fast overfitting — train acc → 100%). Details in
   `ARCHITECTURE.md` Stage 4.
@@ -77,7 +77,7 @@ root covers the whole repo; subfolders don't get their own.
   conditional-OT path's velocity; `--sigma-min 0.0` (default) makes it
   exactly rectified flow. **No noise schedule, no ELBO, by design** — don't
   add betas/`alpha_bar`, a variance head, or loss reweighting. 1,175,841
-  params at `--base-channels 32`; data at `E:\datasets\mnist-dataset`.
+  params at `--base-channels 32`; same MNIST drop as `mnist-kmeans`/`mnist-vae`.
   Careful with the evaluator's round-trip sweep: it measures **ODE
   discretization error, not quality** (an untrained model scores
   near-perfectly on it). No FID by design — it would need a pretrained

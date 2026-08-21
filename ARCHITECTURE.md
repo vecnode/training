@@ -144,8 +144,8 @@ ChatML wrapper differs.
 
 ### CNN/DailyMail — wired in and verified
 
-Downloaded locally to `C:\Users\luisarandas\Desktop\cnn_dailymail\3.0.0\`
-(outside the repo, outside the root folder, gitignored regardless). Measured
+Downloaded locally, outside the repo and outside the root folder
+(gitignored regardless). Measured
 against the actual files:
 
 | Split | Rows | Size |
@@ -229,8 +229,8 @@ the expected sanity-check result, not a target to beat).
 [`training/cifar10-vqvae/`](training/cifar10-vqvae/README.md) is the next
 pipeline here: a VQ-VAE
 ([van den Oord et al., 2017](https://arxiv.org/abs/1711.00937)) trained
-from scratch on CIFAR-10 (raw python-format pickles at
-`E:\datasets\cifar-10-python`, parsed by hand with stdlib `pickle` — no
+from scratch on CIFAR-10 (raw python-format pickles, parsed by hand
+with stdlib `pickle` — no
 torchvision/keras, no Pillow). It is the **in-place successor of the
 former `cifar10-vae`** (renamed/converted): a plain VAE's blur comes from
 Gaussian-posterior averaging in the ELBO, and VQ-VAE removes that
@@ -255,7 +255,7 @@ is the text-classification pipeline here: a Text CNN
 ([Kim, 2014](https://arxiv.org/abs/1408.5882)) trained **from scratch** on
 the [Large Movie Review Dataset](https://ai.stanford.edu/~amaas/data/sentiment/)
 (25k train / 25k test binary sentiment; raw review `.txt` files at
-`E:\datasets\aclImdb_v1`, parsed by hand — no torchtext/datasets/nltk).
+parsed by hand — no torchtext/datasets/nltk).
 Same hand-written philosophy as the whole `training/` folder: a
 randomly-initialized **trainable** embedding (**no GloVe** — strictly
 IMDB-only data by design), three parallel 1D convs (widths 3/4/5 × 128
@@ -422,7 +422,7 @@ executions where noted, actually run, not assumed:
 
 - `training/cifar10-vqvae` (successor of the former `cifar10-vae`) — real
   runs on the RTX 3090 against the actual downloaded CIFAR-10 python
-  pickles (`E:\datasets\cifar-10-python`): `build_cifar10_dataset.py`
+  pickles: `build_cifar10_dataset.py`
   wrote `data/cifar10.npz` (50k train / 10k test); `train_vqvae.py` and
   `evaluate_vqvae.py` run end-to-end (100 epochs, ~10–15 min, codebook
   perplexity ~404/512, 512/512 codes fired on test — no collapse).
@@ -432,7 +432,7 @@ executions where noted, actually run, not assumed:
   discrete-codebook family removes the plain-VAE blur mechanism. Full
   numbers in the pipeline README's "Verified runs".
 - `training/flow-matching-mnist` — real run on the RTX 3090 against the
-  actual MNIST IDX files at `E:\datasets\mnist-dataset`:
+  actual MNIST IDX files:
   `build_mnist_dataset.py` wrote `data/mnist.npz` (60k train / 10k test);
   `train_flow.py` trained 1,175,841 params for 40 epochs in **317.5 s**
   (val velocity MSE 0.2263 → **0.1704**, best at epoch 38 — train and val

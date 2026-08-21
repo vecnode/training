@@ -9,7 +9,7 @@ it is clear exactly what each column turns into.
 
 Usage:
     uv run --directory training/adult-income-logreg python build_income_dataset.py \
-        --data-dir "C:\\Users\\luisarandas\\Desktop\\adult" \
+        --data-dir "C:\\path\\to\\adult" \
         --output-dir data
 """
 

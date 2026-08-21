@@ -101,8 +101,8 @@ constraint, not something to patch around silently.
   data, random-init trainable embeddings; don't silently add pretrained
   vectors. `build_imdb_dataset.py` verifies exactly 12,500 review files per
   split and refuses to build on a partial extraction (the dataset was once
-  caught mid-extraction with `train/pos` still filling up). Data lives at
-  `E:\datasets\aclImdb_v1` (a nested `aclImdb/` subfolder is also accepted).
+  caught mid-extraction with `train/pos` still filling up); a nested
+  `aclImdb/` subfolder is also accepted.
   Verified real run: **89.2%** test acc, 20 epochs in ~31 s on the RTX 3090;
   dropout 0.5, best checkpoint by val acc (peaks ~epoch 3, then the model
   overfits fast — train acc → 100%); a dropout-0.7 variant scored worse and
@@ -124,8 +124,8 @@ constraint, not something to patch around silently.
   [2209.03003](https://arxiv.org/abs/2209.03003)). **There is no noise
   schedule and no ELBO here on purpose** — don't add betas/`alpha_bar`, a
   variance head, or loss reweighting; that turns it back into a DDPM.
-  1,175,841 params at `--base-channels 32`; data at
-  `E:\datasets\mnist-dataset` (shared with `mnist-kmeans`/`mnist-vae`).
+  1,175,841 params at `--base-channels 32`; same MNIST drop as
+  `mnist-kmeans`/`mnist-vae`.
   **The evaluator's round-trip MAE/PSNR sweep measures ODE discretization
   error, not sample quality** — a near-zero velocity field round-trips
   almost perfectly since the identity is its own inverse, and a 2-epoch

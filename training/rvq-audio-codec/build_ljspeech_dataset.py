@@ -33,7 +33,7 @@ check in training/imdb-sentiment-cnn.
 
 Usage:
     uv run --directory training/rvq-audio-codec python build_ljspeech_dataset.py \
-        --data-dir "E:\\datasets\\LJSpeech-1.1" \
+        --data-dir "C:\\path\\to\\LJSpeech-1.1" \
         --output-dir data
 """
 
@@ -113,7 +113,7 @@ def read_wav_pcm16(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--data-dir", default=r"E:\datasets\LJSpeech-1.1",
+        "--data-dir", default=r"C:\path\to\LJSpeech-1.1",
         help="Directory containing the extracted LJSpeech wavs/ folder (an "
              "LJSpeech-1.1 subfolder is also accepted).",
     )

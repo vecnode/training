@@ -19,7 +19,7 @@ independent and doesn't import another pipeline folder's code.
 
 Usage:
     uv run --directory training/flow-matching-mnist python build_mnist_dataset.py \
-        --data-dir "E:\\datasets\\mnist-dataset" \
+        --data-dir "C:\\path\\to\\mnist-dataset" \
         --output-dir data
 """
 
