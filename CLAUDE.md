@@ -120,6 +120,39 @@ root covers the whole repo; subfolders don't get their own.
   codec with an audible metallic edge, not a transparent one. Don't re-run
   training to chase better numbers unless asked — those results are the
   record. Details in `ARCHITECTURE.md` Stage 4.
+- **`training/gaussian-splatting/`** — 3D Gaussian Splatting
+  ([Kerbl et al. 2023](https://arxiv.org/abs/2308.04079)) optimized **from
+  scratch, per scene**, on NeRF-Synthetic / Blender; the repo's **first 3D
+  pipeline**. No network — the scene *is* a few hundred thousand
+  anisotropic Gaussians fitted to photographs from a random point cloud.
+  Hand-written torch: PNG decoder and writer, EWA covariance projection,
+  tile binning + alpha compositing, SH colour, densification, SSIM, orbit
+  path, binary `.ply` — no `gsplat`/`diff-gaussian-rasterization`, no
+  COLMAP/`open3d`/`plyfile`, no Pillow/`torchvision`, no `DataLoader`.
+  `--data-dir` points at an extracted NeRF-Synthetic (13,100-style count
+  check: exactly 100/100/200 per split; `test/` holds 600 files because of
+  unused `_depth_`/`_normal_` maps), stored as a memmapped
+  `data/<scene>_images.u8` + meta `.npz` (768 MB/scene, 6.1 GB for all
+  eight). **Alpha composited over white and the Blender→OpenCV camera
+  conversion are load-bearing** — white background is what every published
+  baseline assumes, and the conversion is verified via `det(R) == +1` (a
+  wrong flip mirrors the scene and still looks like a plausible loss
+  curve); principal point is `(S-1)/2`, not `S/2`. **Blender scenes are
+  random-init, not SfM** — that's why there's no COLMAP here; don't add
+  one. The rasterizer is **plain PyTorch on purpose** (compositing as an
+  exclusive `cumprod` so autograd replaces the reference's hand-derived
+  CUDA backward); don't swap in `gsplat` kernels unasked. The per-tile list
+  is walked in **slabs with early termination on transmittance, not a fixed
+  cap** — the cap was tried first and left a grid of **visible 16x16 tile
+  seams**, because a memory cap aligned with a spatial partition degrades
+  along that partition. **Adam state is grown/pruned with the parameters**
+  during densification; fresh `nn.Parameter`s would drop the moments. No
+  LPIPS by design (pretrained VGG/AlexNet), same rule as FID in
+  `flow-matching-mnist`. Judge by test-split PSNR/SSIM against the
+  published per-scene table (`--compare`; 3DGS 33.3 dB mean, NeRF 31.0 —
+  and `--downscale > 1` runs are excluded as not comparable) **and by the
+  renders plus the orbit sequence on unseen poses**, which is what surfaces
+  floaters a 200-view mean hides. Details in `ARCHITECTURE.md` Stage 4.
 - **An Axolotl-based `fine-tuning/axolotl-ocr-summary/` pipeline existed
   earlier and was removed by the repo owner.** If something similar returns,
   note `axolotl[deepspeed]` only resolves its `uv` environment on Linux/WSL

@@ -27,6 +27,12 @@ wandb/
 *.ckpt
 last_run_prepared/
 
+# --- 3D Gaussian Splatting point clouds (training/gaussian-splatting writes
+# these into runs/, already covered, but a stray export anywhere else would be
+# tens/hundreds of MB - never commit one) ---
+*.ply
+*.splat
+
 # --- Fused/merged models (regenerable via each pipeline's merge script) ---
 merged_model/
 

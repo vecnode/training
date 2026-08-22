@@ -14,6 +14,7 @@ Model Training, Pre-Training and Fine-Tuning workspace, scaling from a single RT
     - Train VAE on [MNIST](www.kaggle.com/datasets/hojjatk/mnist-dataset) dataset
     - Train K-Means on [MNIST](www.kaggle.com/datasets/hojjatk/mnist-dataset) dataset
     - Train Logistic Regression on [uci.edu/adult](https://archive.ics.uci.edu/dataset/2/adult) dataset
+    - Train 3D Gaussian Splatting on [NERF Synthetic](https://huggingface.co/donydchen/matchnerf/tree/main) dataset
 - [fine-tuning](./fine-tuning/)
     - Fine-tune [Qwen2.5-3B-Instruct](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct) on [CNN/DailyMail](https://huggingface.co/datasets/abisee/cnn_dailymail) dataset
     - Fine-tune [Vicuna-7b-v1.5](https://huggingface.co/lmsys/vicuna-7b-v1.5) on [CNN/DailyMail](https://huggingface.co/datasets/abisee/cnn_dailymail) dataset
@@ -48,16 +49,18 @@ Text Datasets:
 - [LJSpeech-1.1](https://keithito.com/LJ-Speech-Dataset/)
     - This is a public domain speech dataset consisting of 13,100 short audio clips of a single speaker reading passages from 7 non-fiction books. A transcription is provided for each clip. Clips vary in length from 1 to 10 seconds and have a total length of approximately 24 hours. 
 
+- [NERF Synthetic](https://huggingface.co/donydchen/matchnerf/tree/main)
+    - Blender dataset from the original NeRF release. It's ~500MB
 
-<!--
-- [EdinburghNLP/xsum](https://huggingface.co/datasets/EdinburghNLP/xsum)
-- [knkarthick/samsum](https://huggingface.co/datasets/knkarthick/samsum)
-- [databricks/databricks-dolly-15k](https://huggingface.co/datasets/databricks/databricks-dolly-15k)
--->
+
 
 ## Commands
 
 ```sh
+# --- training/gaussian-splatting
+# 3D Gaussian Splatting (Kerbl et al., SIGGRAPH 2023) — per-scene optimization from scratch on NeRF-Synthetic.
+
+
 # --- Residual Vector Quantization (RVQ) in audio codec
 uv run --directory training/rvq-audio-codec python build_ljspeech_dataset.py --data-dir "C:\path\to\ljspeech-dataset" --output-dir data
 uv run --directory training/rvq-audio-codec python -u train_codec.py --data-dir data --num-epochs 60 --batch-size 32 --output-dir runs/ljspeech_codec
