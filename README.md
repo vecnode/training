@@ -9,12 +9,12 @@ Model Training, Pre-Training and Fine-Tuning workspace, scaling from a single RT
 - [training](./training/)
     - Train RVQ Audio Codec on [LJSpeech-1.1](https://keithito.com/LJ-Speech-Dataset/) dataset
     - Train UNet (Flow Matching) on [MNIST](www.kaggle.com/datasets/hojjatk/mnist-dataset) dataset
+    - Train DCGAN on [Fashion-MNIST](https://www.kaggle.com/datasets/zalando-research/fashionmnist)
     - Train TextCNN on [Large Movie Review](https://ai.stanford.edu/~amaas/data/sentiment/) dataset
     - Train VQ-VAE on [CIFAR-10](https://cave.cs.toronto.edu/kriz/cifar.html) dataset
     - Train VAE on [MNIST](www.kaggle.com/datasets/hojjatk/mnist-dataset) dataset
     - Train K-Means on [MNIST](www.kaggle.com/datasets/hojjatk/mnist-dataset) dataset
     - Train Logistic Regression on [uci.edu/adult](https://archive.ics.uci.edu/dataset/2/adult) dataset
-    - Train 3D Gaussian Splatting on [NERF Synthetic](https://huggingface.co/donydchen/matchnerf/tree/main) dataset
 - [fine-tuning](./fine-tuning/)
     - Fine-tune [Qwen2.5-3B-Instruct](https://huggingface.co/Qwen/Qwen2.5-3B-Instruct) on [CNN/DailyMail](https://huggingface.co/datasets/abisee/cnn_dailymail) dataset
     - Fine-tune [Vicuna-7b-v1.5](https://huggingface.co/lmsys/vicuna-7b-v1.5) on [CNN/DailyMail](https://huggingface.co/datasets/abisee/cnn_dailymail) dataset
@@ -23,6 +23,7 @@ Model Training, Pre-Training and Fine-Tuning workspace, scaling from a single RT
     - Summarize OCR text with ([unsloth/gemma-3-4b-it](https://huggingface.co/unsloth/gemma-3-4b-it))
     - Describe page layout/structure image-grounded with ([unsloth/gemma-3-4b-it](https://huggingface.co/unsloth/gemma-3-4b-it))
     - Generate synthetic QA pairs from OCR text with ([unsloth/gemma-3-4b-it](https://huggingface.co/unsloth/gemma-3-4b-it))
+
 
 ## Datasets
 
@@ -49,17 +50,17 @@ Text Datasets:
 - [LJSpeech-1.1](https://keithito.com/LJ-Speech-Dataset/)
     - This is a public domain speech dataset consisting of 13,100 short audio clips of a single speaker reading passages from 7 non-fiction books. A transcription is provided for each clip. Clips vary in length from 1 to 10 seconds and have a total length of approximately 24 hours. 
 
-- [NERF Synthetic](https://huggingface.co/donydchen/matchnerf/tree/main)
-    - Blender dataset from the original NeRF release. It's ~500MB
-
+- [Fashion-MNIST](https://www.kaggle.com/datasets/zalando-research/fashionmnist)
+    - Fashion-MNIST is a dataset of Zalando's article images—consisting of a training set of 60,000 examples and a test set of 10,000 examples. Each example is a 28x28 grayscale image, associated with a label from 10 classes.
 
 
 ## Commands
 
 ```sh
-# --- training/gaussian-splatting
-# 3D Gaussian Splatting (Kerbl et al., SIGGRAPH 2023) — per-scene optimization from scratch on NeRF-Synthetic.
-
+# --- DCGAN
+uv run --directory training/fashion-mnist-dcgan python build_fashion_mnist_dataset.py --data-dir "C:\path\to\fashionmnist" --output-dir data
+uv run --directory training/fashion-mnist-dcgan python train_dcgan.py --data-path data/fashion_mnist.npz --num-epochs 50 --batch-size 128 --output-dir runs/fashion_mnist_dcgan
+uv run --directory training/fashion-mnist-dcgan python evaluate_dcgan.py --data-path data/fashion_mnist.npz --checkpoint-path runs/fashion_mnist_dcgan/dcgan_epoch0050.pt --output-dir runs/fashion_mnist_dcgan
 
 # --- Residual Vector Quantization (RVQ) in audio codec
 uv run --directory training/rvq-audio-codec python build_ljspeech_dataset.py --data-dir "C:\path\to\ljspeech-dataset" --output-dir data

@@ -201,70 +201,36 @@ constraint, not something to patch around silently.
   README's "Verified runs" and in `ARCHITECTURE.md`; treat them as the
   record.
 
-- **`training/gaussian-splatting/`** optimizes **3D Gaussian Splatting**
-  ([Kerbl et al. 2023](https://arxiv.org/abs/2308.04079)) **from scratch,
-  per scene**, on NeRF-Synthetic / Blender - the repo's **first 3D
-  pipeline**. There is no network: the scene *is* a few hundred thousand
-  anisotropic 3D Gaussians fitted directly to photographs from a random
-  point cloud. Hand-written philosophy like the rest of `training/`: the
-  PNG decoder *and* writer, the EWA projection of 3D covariances to
-  screen-space conics, tile binning / depth sorting / alpha compositing,
-  spherical-harmonic colour, adaptive densification with its Adam-state
-  surgery, SSIM, the orbit camera path and the binary `.ply` writer are all
-  written out - no `gsplat`, no `diff-gaussian-rasterization`, no
-  COLMAP/`pycolmap`, no `open3d`/`plyfile`/`trimesh`, no
-  Pillow/`torchvision`/OpenCV, no `DataLoader`. `--data-dir` points at an
-  extracted NeRF-Synthetic (a nested `nerf_synthetic/` subfolder is also
-  accepted); `build_blender_dataset.py` verifies exactly 100/100/200
-  renders per split and refuses a partial extraction, and writes a
-  memmapped `data/<scene>_images.u8` + `data/<scene>_meta.npz` rather than
-  an `.npz` - one scene is 768 MB of uint8 and all eight are 6.1 GB. Note
-  `test/` holds 600 files, not 200: each render ships with `_depth_` and
-  `_normal_` maps this pipeline does not use. Things not to silently undo:
-  - **Alpha is composited over white, at build time.** Every published
-    NeRF-Synthetic number - NeRF's, Mip-NeRF's, 3DGS's - is measured that
-    way. Changing it to black, or keeping the alpha channel, silently makes
-    this pipeline's PSNR incomparable to every baseline in the literature.
-  - **Cameras are converted Blender/OpenGL -> OpenCV** (negate basis
-    columns 1 and 2, then invert), and the conversion is *verified*:
-    `det(R)` must be `+1`, because a wrong flip gives `-1`, mirrors the
-    scene, and still produces a plausible-looking loss curve. Every camera's
-    +Z must point at the origin to float precision, and the principal point
-    is `(S-1)/2`, not `S/2`, matching the reference's NDC-to-pixel mapping.
-  - **Blender scenes are initialized from 100,000 uniform random points in
-    a 2.6 cube, not from structure-from-motion.** That is what the reference
-    does for synthetic scenes and it is why there is no COLMAP dependency
-    here - the geometry comes entirely from densification. Don't add an SfM
-    step.
-  - **The rasterizer is plain PyTorch on purpose.** The compositing is an
-    exclusive `cumprod`, which autograd differentiates, so unlike the
-    reference there is no hand-derived CUDA backward pass. It is slower;
-    that is the trade this folder exists to make. Don't swap in `gsplat`'s
-    kernels without being asked.
-  - **The per-tile splat list is walked in slabs with early termination on
-    transmittance - not truncated at a fixed cap.** This was got wrong
-    first: a fixed `--max-gaussians-per-tile` is only safe when that many
-    layers saturate transmittance, and where they did not the truncation
-    fell exactly on a tile boundary and left a grid of **visible 16x16
-    seams** across every dense region. A memory cap aligned with a spatial
-    partition degrades *along the partition*, which is where the eye looks.
-    The cap survives only as a safety bound; don't reinstate it as the
-    quality knob.
-  - **The Adam state is grown and pruned in step with the parameters.**
-    Densification changes the number of Gaussians; building fresh
-    `nn.Parameter`s silently drops the moments, so every split Gaussian
-    restarts from zero momentum and the run quietly loses quality.
-  - **`--downscale > 1` is not comparable to the published table** and
-    `evaluate_gaussians.py --compare` deliberately refuses to include such
-    a run. A smaller image is an easier target.
-  - There is deliberately **no LPIPS**, though the 3DGS paper reports it -
-    it needs a pretrained VGG/AlexNet, the same rule that keeps FID out of
-    `flow-matching-mnist` and ViSQOL/PESQ/NISQA out of `rvq-audio-codec`.
-  Judge a run by PSNR/SSIM on the 200 test views against the published
-  per-scene baselines (3DGS averages 33.3 dB over the eight scenes, NeRF
-  31.0), **and by the renders and the orbit sequence** - a mean over 200
-  test views hides floaters that only appear from angles no camera took,
-  which is what the orbit path on unseen poses exists to find.
+- **`training/fashion-mnist-dcgan/`** trains a **DCGAN**
+  ([Radford et al. 2015](https://arxiv.org/abs/1511.06434)) **from scratch**
+  on Fashion-MNIST - the repo's **first GAN pipeline**. Hand-written
+  philosophy like the rest of `training/`: the generator and discriminator
+  conv nets, the `N(0, 0.02)` weight init, one-sided label smoothing and the
+  balanced D/G update loop are all written out - no `torchvision`, no
+  `kagglehub`/`pytorch-gan-metrics`, no `DataLoader` (numpy-permutation
+  batching). `--data-dir` points at a folder of IDX ubyte files (the Kaggle
+  CSVs are also accepted); `build_fashion_mnist_dataset.py` verifies exactly
+  60,000/10,000 and refuses a partial extraction, writing
+  `data/fashion_mnist.npz` (float32 `[0,1]` plus class names; the trainer
+  rescales to `[-1,1]` for Tanh output). Things not to silently undo:
+  - **28x28 does not divide cleanly down DCGAN's canonical 32x32 ladder** -
+    three stride-2 convs take 28 -> 14 -> 7 -> 3, so the discriminator's
+    last feature map is 3x3 (final 3x3 conv to a logit) and the generator
+    starts from a 7x7 grid, not 4x4. The shapes in `train_dcgan.py` are the
+    verified ones; "fixing" them to the paper's 32x32 figures breaks the
+    tensors.
+  - **A GAN is judged by its samples, not its loss.** D/G losses move
+    adversarially and say little about quality, so `train_dcgan.py` saves a
+    fixed-z sample grid every `--sample-every` epochs (collapse becomes
+    visible across training) and `evaluate_dcgan.py` emits `samples_grid.png`
+    (hand-written zlib PNG writer, same as `mnist-vae`/`flow-matching`), the
+    nearest-neighbour memorization check (L2 to the closest training image
+    vs a real-image control) and a pairwise-diversity probe. There is
+    deliberately **no FID/IS** - both need a pretrained Inception, the same
+    rule that keeps FID out of `flow-matching-mnist` and ViSQOL out of
+    `rvq-audio-codec`.
+  New pipeline - no verified-run numbers yet; pin them in the pipeline
+  README's "Verified runs" once it has been run on the RTX 3090.
 
 - **Cross-folder references use full relative paths from repo root**, e.g.
   `fine-tuning/vicuna-7b-lora/README.md` reaches a sibling pipeline via

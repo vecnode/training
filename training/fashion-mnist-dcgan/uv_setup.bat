@@ -1,6 +1,6 @@
 @echo off
 rem -----------------------------------------------------------------------------
-rem Create/sync local uv environment and validate CUDA-ready torch.
+rem Create/sync local uv environment and validate CUDA-ready torch (fashion-mnist-dcgan).
 rem Copyright (c) vecnode 2026
 rem -----------------------------------------------------------------------------
 setlocal EnableExtensions
@@ -81,4 +81,4 @@ if errorlevel 1 (
     exit /b 1
 )
 
-endlocal & set "GAUSSIAN_SPLATTING_PYTHON=%VENV_PY%" & exit /b 0
+endlocal & set "FASHION_MNIST_DCGAN_PYTHON=%VENV_PY%" & exit /b 0

@@ -5,8 +5,8 @@ From-scratch / non-LoRA training pipelines (see the root README and
 
 - [adult-income-logreg](./adult-income-logreg/) — logistic regression from scratch (raw numpy) on UCI Adult / Census Income
 - [cifar10-vqvae](./cifar10-vqvae/) — VQ-VAE from scratch (torch) on CIFAR-10
+- [fashion-mnist-dcgan](./fashion-mnist-dcgan/) — DCGAN from scratch (torch, hand-written conv nets + label smoothing) on Fashion-MNIST
 - [flow-matching-mnist](./flow-matching-mnist/) — flow matching / rectified flow from scratch (torch, hand-written UNet + ODE sampler) on MNIST
-- [gaussian-splatting](./gaussian-splatting/) — 3D Gaussian Splatting from scratch (torch, hand-written differentiable splat rasterizer + adaptive densification) on NeRF-Synthetic / Blender
 - [imdb-sentiment-cnn](./imdb-sentiment-cnn/) — Text CNN from scratch (torch, random embeddings) on the Large Movie Review Dataset
 - [mnist-kmeans](./mnist-kmeans/) — k-means from scratch (raw numpy) on MNIST
 - [mnist-vae](./mnist-vae/) — VAE from scratch (torch) on MNIST

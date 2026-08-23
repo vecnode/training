@@ -386,72 +386,38 @@ over 1,024 entries, so uniform usage is only 2.16 per entry and an absolute
 reported 1,023 of 1,024 entries "revived" per codebook; after the fix, 0.
 
 
-[`training/gaussian-splatting/`](training/gaussian-splatting/README.md) is
-the eighth pipeline here and the first 3D one: **3D Gaussian Splatting**
-([Kerbl et al., SIGGRAPH 2023](https://arxiv.org/abs/2308.04079)) optimized
-from scratch per scene on NeRF-Synthetic / Blender. There is no network -
-the scene *is* the parameters, a few hundred thousand anisotropic 3D
-Gaussians (position, scale, rotation quaternion, opacity, 16 SH colour
-coefficients) fitted directly to photographs by gradient descent, from a
-random point cloud. Hand-written like the rest of `training/`: no `gsplat`
-or `diff-gaussian-rasterization`, no COLMAP/`open3d`/`plyfile`, no
-Pillow/`torchvision`, no `DataLoader`. The PNG decoder *and* writer, the
-EWA projection of 3D covariances to screen-space conics, tile binning and
-alpha compositing, SH colour, adaptive densification and SSIM are all
-written out.
+[`training/fashion-mnist-dcgan/`](training/fashion-mnist-dcgan/README.md) is
+the repo's **first GAN pipeline**: a **DCGAN**
+([Radford et al., ICLR 2016](https://arxiv.org/abs/1511.06434)) trained
+from scratch on Fashion-MNIST (60k/10k, 28x28 grayscale, 10 classes, IDX
+ubyte files parsed by hand - the Kaggle CSVs are also accepted by the
+builder). Generator: `z ~ N(0,I)` (100-dim) -> linear -> 7x7x256 ->
+BN+ReLU -> deconv -> 14x14x128 -> BN+ReLU -> deconv -> 28x28x1 -> Tanh.
+Discriminator: strided convs 28 -> 14 -> 7 -> 3 -> 1 with LeakyReLU(0.2)
+and BN everywhere except the input layer, ending in a single logit. Both
+nets use the hand-written `N(0, 0.02)` initialization, one-sided label
+smoothing (real = 0.9), and Adam at 2e-4 with betas (0.5, 0.999) - the
+DCGAN tuning that makes the two-player game actually converge. Hand-written
+like the rest of `training/`: no `torchvision`, no `kagglehub`/
+`pytorch-gan-metrics`, no `DataLoader` (numpy-permutation batching).
 
-Two structural facts make this feasible at this size. First, **Blender
-scenes need no structure-from-motion**: the reference initializes them from
-100,000 uniformly random points in a cube of side 2.6, not from an SfM
-cloud, so there is no COLMAP dependency and the geometry comes entirely
-from densification. Second, **the rasterizer is plain PyTorch, not CUDA** -
-the compositing is written as an exclusive cumulative product, which
-autograd differentiates on its own, so unlike the reference there is no
-hand-derived backward pass. That is the trade the folder exists to make,
-and it costs speed.
-
-Things not to silently undo:
-- **Alpha is composited over white at build time, and cameras are
-  converted Blender/OpenGL -> OpenCV.** Every published NeRF-Synthetic
-  number assumes a white background; changing it makes this pipeline's
-  PSNR incomparable to every baseline. The camera conversion (negate basis
-  columns 1 and 2, then invert) is verified rather than assumed - `det(R)`
-  must be `+1`, since a wrong flip gives `-1` and silently mirrors the
-  scene while still producing a plausible loss curve.
-- **The per-tile splat list is walked in slabs with early termination on
-  transmittance, not truncated at a fixed cap.** This one was got wrong
-  first and the failure was instructive: a fixed `--max-gaussians-per-tile`
-  is only safe when that many layers saturate transmittance, and where they
-  did not, the truncation fell exactly on a tile boundary and left a grid
-  of **visible 16x16 seams** across every dense region. A memory cap that
-  happens to align with a spatial partition does not degrade gracefully -
-  it degrades along the partition, which is where the eye looks. The cap
-  survives only as a safety bound.
-- **The Adam state is grown and pruned in step with the parameters.**
-  Densification changes the *number* of Gaussians; building fresh
-  `nn.Parameter`s drops the moments, so every split Gaussian restarts from
-  zero momentum and the run quietly loses quality.
-- **No LPIPS**, though the 3DGS paper reports it - it needs a pretrained
-  VGG/AlexNet. Same rule that keeps FID out of `flow-matching-mnist` and
-  ViSQOL out of `rvq-audio-codec`.
-
-Unlike most pipelines in this repo, this one has a well-established
-published baseline for exactly this data, so `evaluate_gaussians.py
---compare runs` prints per-scene PSNR/SSIM next to the 3DGS paper's and
-NeRF's figures (3DGS averages 33.3 dB over the eight scenes, NeRF 31.0),
-and refuses to include any checkpoint evaluated at `--downscale > 1`, since
-a smaller image is an easier target. The evaluator also exports a `.ply` in
-the reference's layout, which loads directly in SuperSplat or antimatter15's
-viewer - the scene, in a browser, in real time.
-
-Verified so far on the repo owner's RTX 3090: the hand-written PNG decoder
-matches Pillow **byte for byte** and runs at 0.17 s/image at batch 100
-(4.0 s at batch 1 - the un-filtering vectorizes across images, not within a
-row), 68 s for a 400-render scene. The projection/compositing math is
-checked by a single-view overfit mode (`--single-view N`, densification
-off), which reaches **35.1 dB / 0.983 SSIM** in 1,000 iterations - a wrong
-camera convention or covariance cannot get there. Full-run numbers are
-pinned in the pipeline README's "Verified runs".
+Two notes worth keeping. First, **28x28 does not divide cleanly down
+DCGAN's canonical 32x32 ladder**: three stride-2 convs take 28 -> 14 -> 7
+-> 3, so the discriminator's last feature map is 3x3 (a final 3x3 conv to
+one logit) and the generator must start from a 7x7 grid, not 4x4. The
+shapes in `train_dcgan.py` are the verified ones - "fixing" them to the
+paper's 32x32 numbers breaks the tensors. Second, **a GAN is judged by its
+samples, not its loss**: D/G losses move adversarially and say almost
+nothing about sample quality, so `train_dcgan.py` writes a fixed-z sample
+grid every `--sample-every` epochs (collapse becomes visible across
+training) and `evaluate_dcgan.py` emits `samples_grid.png` plus the same
+nearest-neighbour memorization guard as `flow-matching-mnist` (L2 to the
+closest training image, compared against a real-image control) and a
+pairwise-diversity probe. There is deliberately **no FID/IS** - both need
+a pretrained Inception, the same rule that keeps FID out of
+`flow-matching-mnist` and ViSQOL out of `rvq-audio-codec`. The pipeline is
+new; verified-run numbers go in the pipeline README's "Verified runs" once
+it has been run on the repo owner's RTX 3090.
 
 
 ## Datasets
