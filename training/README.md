@@ -11,3 +11,4 @@ From-scratch / non-LoRA training pipelines (see the root README and
 - [mnist-kmeans](./mnist-kmeans/) — k-means from scratch (raw numpy) on MNIST
 - [mnist-vae](./mnist-vae/) — VAE from scratch (torch) on MNIST
 - [rvq-audio-codec](./rvq-audio-codec/) — neural audio codec with residual vector quantization from scratch (torch, hand-written SEANet encoder/decoder + RVQ + multi-scale STFT discriminator) on LJSpeech
+- [vit-cifar10](./vit-cifar10/) — Vision Transformer from scratch (torch, hand-written patch embed + pre-LN blocks + multi-head attention) on CIFAR-10

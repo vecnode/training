@@ -232,6 +232,46 @@ constraint, not something to patch around silently.
   New pipeline - no verified-run numbers yet; pin them in the pipeline
   README's "Verified runs" once it has been run on the RTX 3090.
 
+- **`training/vit-cifar10/`** trains a **Vision Transformer**
+  ([Dosovitskiy et al. 2021](https://arxiv.org/abs/2010.11929), pre-LN /
+  norm-first layout as popularized by DeiT) **from scratch** on CIFAR-10 -
+  the repo's **first attention-based vision model and its first from-scratch
+  transformer of any kind**. Hand-written philosophy like the rest of
+  `training/`: the patch embedding, learned CLS token + positional
+  embeddings, the pre-LN transformer blocks, and the multi-head
+  self-attention (QKV projections, scaled dot-product, output projection)
+  are all plain `torch.nn` - no `transformers`/`timm`/`torchvision`, no
+  `DataLoader` (numpy-permutation batching). `build_cifar10_dataset.py` is
+  the same stdlib-pickle parser / same `data/cifar10.npz` contract as
+  `training/cifar10-vqvae`. Things not to silently undo:
+  - **Flip+crop augmentation is plain torch ops, applied per batch in the
+    training loop** (`torch.flip`, 4px zero-pad + random crop, per-channel
+    normalize with the hardcoded CIFAR-10 train statistics). `--no-augment`
+    is the documented A/B (measured 66.8% top-1 with aug at 60 epochs; the
+    no-aug leg is still unmeasured), not a debug flag to remove.
+  - **The LR schedule is linear-warmup-then-cosine, not plain cosine.**
+    ViTs train unstably from scratch without the warmup; the rest of
+    `training/`'s plain `CosineAnnealingLR` is deliberately not reused
+    here. Don't "simplify" it back.
+  - **AdamW with weight decay 0.05, not plain Adam** - the ViT default,
+    unlike the other torch trainers in this folder. Same reason.
+  Defaults are ~10.7M params (`--dim 384 --depth 6 --heads 6 --mlp-ratio
+  4`), ~23 min for 60 epochs fp32 on the RTX 3090; best checkpoint by val
+  acc on a 10% holdout, the 10k test split stays unseen until
+  `evaluate_vit.py`. The evaluator reports test top-1/top-5, per-class
+  accuracy + confusion matrix, and writes `predictions_grid.png` (a
+  hand-written zlib RGB PNG - green border = correct, red = wrong - no
+  imaging library). There is deliberately **no pretrained-feature score**,
+  the same rule that keeps FID out of `flow-matching-mnist` and ViSQOL out
+  of `rvq-audio-codec`. The patch-embed/block stack is the planned encoder
+  for a future I-JEPA-style self-supervised pipeline. Verified real run on
+  the RTX 3090 (repo owner): **66.82% test top-1 / 97.32% top-5** at the
+  60-epoch defaults in ~23 min (10,695,562 params, best val 67.50% at
+  epoch 60, frog 81.4% / cat 44.7% per-class). That is below the ~80-86%
+  figure this section's earlier draft expected - too optimistic for
+  flip+crop-only at 60 epochs; the measured 66.8% is the record, and the
+  correction is documented in the pipeline README.
+
 - **Cross-folder references use full relative paths from repo root**, e.g.
   `fine-tuning/vicuna-7b-lora/README.md` reaches a sibling pipeline via
   `../../<stage>/<pipeline>/`. When moving, renaming or removing a pipeline

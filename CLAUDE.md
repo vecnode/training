@@ -138,6 +138,29 @@ root covers the whole repo; subfolders don't get their own.
   **no FID/IS by design** (pretrained Inception), same rule as FID in
   `flow-matching-mnist`. New pipeline — no verified-run numbers yet.
   Details in `ARCHITECTURE.md` Stage 4.
+- **`training/vit-cifar10/`** — Vision Transformer
+  ([Dosovitskiy et al. 2021](https://arxiv.org/abs/2010.11929), pre-LN /
+  norm-first layout as popularized by DeiT) trained **from scratch** on
+  CIFAR-10; the repo's **first attention-based vision model and first
+  from-scratch transformer of any kind**. Hand-written torch: patch embed,
+  learned CLS token + positional embeddings, pre-LN blocks, and
+  multi-head self-attention (QKV projections, scaled dot-product, output
+  projection) — no `transformers`/`timm`/`torchvision`, no `DataLoader`.
+  Flip+crop is plain torch ops (flip, 4px zero-pad + random crop, normalize
+  with the hardcoded CIFAR-10 train statistics); `--no-augment` is the
+  documented A/B. **AdamW (wd 0.05) with a warmup-then-cosine LR schedule
+  — not plain Adam/plain cosine like the other `training/` trainers; don't
+  "simplify" that back, ViTs need the warmup from scratch.** ~10.7M params
+  at defaults (`--dim 384 --depth 6 --heads 6`), ~23 min for 60 epochs on
+  the 3090. Eval: test top-1/top-5, per-class + confusion matrix, a
+  hand-written zlib RGB `predictions_grid.png` (green/red borders for
+  correct/wrong) — **no pretrained-feature score by design**, same rule as
+  FID in `flow-matching-mnist`. The patch-embed/block stack is the planned
+  encoder for a future I-JEPA-style pipeline. Verified real run (repo
+  owner, RTX 3090): **66.8% test top-1 / 97.3% top-5** at 60 epochs in
+  ~23 min — below the ~80–86% guess this section's earlier draft carried,
+  which was corrected to the measured numbers (the record). Details in
+  `ARCHITECTURE.md` Stage 4.
 - **An Axolotl-based `fine-tuning/axolotl-ocr-summary/` pipeline existed
   earlier and was removed by the repo owner.** If something similar returns,
   note `axolotl[deepspeed]` only resolves its `uv` environment on Linux/WSL

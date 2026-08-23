@@ -8,8 +8,9 @@ Model Training, Pre-Training and Fine-Tuning workspace, scaling from a single RT
 
 - [training](./training/)
     - Train RVQ Audio Codec on [LJSpeech-1.1](https://keithito.com/LJ-Speech-Dataset/) dataset
+    - Train ViT on [CIFAR-10](https://cave.cs.toronto.edu/kriz/cifar.html) dataset
     - Train UNet (Flow Matching) on [MNIST](www.kaggle.com/datasets/hojjatk/mnist-dataset) dataset
-    - Train DCGAN on [Fashion-MNIST](https://www.kaggle.com/datasets/zalando-research/fashionmnist)
+    - Train DCGAN on [Fashion-MNIST](https://www.kaggle.com/datasets/zalando-research/fashionmnist) dataset
     - Train TextCNN on [Large Movie Review](https://ai.stanford.edu/~amaas/data/sentiment/) dataset
     - Train VQ-VAE on [CIFAR-10](https://cave.cs.toronto.edu/kriz/cifar.html) dataset
     - Train VAE on [MNIST](www.kaggle.com/datasets/hojjatk/mnist-dataset) dataset
@@ -57,7 +58,12 @@ Text Datasets:
 ## Commands
 
 ```sh
-# --- DCGAN
+# --- ViT on CIFAR-10
+uv run --directory training/vit-cifar10 python build_cifar10_dataset.py --data-dir "C:\path\to\cifar-10-python" --output-dir data
+uv run --directory training/vit-cifar10 python train_vit.py --data-path data/cifar10.npz --num-epochs 60 --batch-size 128 --output-dir runs/vit_cifar10
+uv run --directory training/vit-cifar10 python evaluate_vit.py --data-path data/cifar10.npz --checkpoint-path runs/vit_cifar10/vit_best.pt --output-dir runs/vit_cifar10
+
+# --- DCGAN on Fashion-MNIST
 uv run --directory training/fashion-mnist-dcgan python build_fashion_mnist_dataset.py --data-dir "C:\path\to\fashionmnist" --output-dir data
 uv run --directory training/fashion-mnist-dcgan python train_dcgan.py --data-path data/fashion_mnist.npz --num-epochs 50 --batch-size 128 --output-dir runs/fashion_mnist_dcgan
 uv run --directory training/fashion-mnist-dcgan python evaluate_dcgan.py --data-path data/fashion_mnist.npz --checkpoint-path runs/fashion_mnist_dcgan/dcgan_epoch0050.pt --output-dir runs/fashion_mnist_dcgan

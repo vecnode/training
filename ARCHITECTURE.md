@@ -206,7 +206,7 @@ folder independently deployable.
 ## Stage 4 — `training/`
 
 From-scratch / non-LoRA training of other models, as distinct from
-adapting an existing checkpoint (`fine-tuning/`). Eight pipelines so far,
+adapting an existing checkpoint (`fine-tuning/`). Nine pipelines so far,
 each an independent `uv` project and each writing out by hand whatever the
 usual library would hide.
 
@@ -420,6 +420,37 @@ new; verified-run numbers go in the pipeline README's "Verified runs" once
 it has been run on the repo owner's RTX 3090.
 
 
+[`training/vit-cifar10/`](training/vit-cifar10/README.md) is the **first
+attention-based vision model in the repo — and its first from-scratch
+transformer of any kind**: a Vision Transformer
+([Dosovitskiy et al., 2021](https://arxiv.org/abs/2010.11929), in the
+pre-LN / norm-first layout popularized by DeiT) trained from scratch on
+CIFAR-10. Hand-written philosophy like the rest of `training/`: the patch
+embedding, learned CLS token + positional embeddings, the transformer
+blocks, and the multi-head self-attention (QKV projections, scaled
+dot-product, output projection) are all plain `torch.nn` — no
+`transformers`/`timm`/`torchvision`, no `DataLoader` (numpy-permutation
+batching). Flip+crop augmentation is plain torch ops (`torch.flip`,
+zero-pad + random crop, per-channel normalize with the hardcoded CIFAR-10
+train statistics). ~10.7M params at the defaults (`--dim 384 --depth 6
+--heads 6 --mlp-ratio 4`), AdamW with weight decay 0.05 and a hand-written
+linear-warmup-then-cosine LR schedule (warmup is the part ViTs need that
+the rest of `training/`'s plain-cosine trainers don't), best checkpoint by
+val acc, ~23 min for 60 epochs on the RTX 3090 fp32. The evaluator
+reports test top-1/top-5, per-class accuracy + confusion matrix, and writes
+a hand-written zlib RGB `predictions_grid.png` (first 32 correct, first 32
+misclassified, green/red borders) — deliberately **no pretrained-feature
+score**, the same rule that keeps FID out of `flow-matching-mnist` and
+ViSQOL out of `rvq-audio-codec`. Verified on the RTX 3090 (repo owner's
+run): **66.82% test top-1 / 97.32% top-5** at the 60-epoch defaults in
+**1,367 s (~23 min)**, 10,695,562 params, best val 67.50% at epoch 60,
+frog best (81.4%) / cat worst (44.7%) with the classic cat↔dog and
+truck↔automobile confusions. That is below the ~80–86% figure this entry
+originally estimated — too optimistic for flip+crop-only at 60 epochs;
+the measured 66.8% is the record (the correction is documented in the
+pipeline README).
+
+
 ## Datasets
 
 None of the fine-tuning pipelines ship data — `DATASET/`, `data/`, `runs/`,
@@ -516,6 +547,15 @@ executions where noted, actually run, not assumed:
   `q_proj`/`v_proj`) rather than trusting `peft`'s target-module table alone.
 - `fine-tuning/vicuna-7b-lora` — real 2,000-sample/2-epoch training run (see
   above), executed by the repo owner, not just a smoke test.
+- `training/vit-cifar10` — full 60-epoch run by the repo owner on the RTX
+  3090 against the real CIFAR-10 drop: `build_cifar10_dataset.py` wrote
+  `data/cifar10.npz` (50k/10k); `train_vit.py` trained 10,695,562 params
+  in **1,367 s (~23 min)** (train acc 0.30 → 0.714, best val 67.50% at
+  epoch 60); `evaluate_vit.py` scored **66.82% test top-1 / 97.32%
+  top-5** on the held-out 10k and wrote `test_metrics.txt` +
+  `predictions_grid.png`. The ~80–86% expectation this pipeline's docs
+  originally carried was corrected to the measured 66.8% (too optimistic
+  for flip+crop-only at 60 epochs) — see the pipeline README.
 Not executed this pass (no PDFs/poppler set up in this environment):
 
 - `pre-training/exec_1.bat` / `scripts/convert_pdf_to_png.ps1`
@@ -562,6 +602,19 @@ Not executed this pass (no PDFs/poppler set up in this environment):
   "learned prior over discrete codes" rung already planned for
   `cifar10-vqvae`. Multi-speaker (LibriTTS/VCTK) is the fix for the
   single-speaker limitation, but only if generalization becomes the goal.
+- `training/vit-cifar10` is verified at **66.8% test top-1 / 97.3% top-5**
+  (60-epoch defaults, ~23 min on the RTX 3090; best val 67.50% at epoch
+  60, still slowly improving at the end) — natural rungs, in rough order:
+  the `--no-augment` A/B (still unmeasured; measures how much of the
+  accuracy is the flip+crop); a longer run (`--num-epochs 120`, the cosine
+  schedule is designed for the full budget); stronger hand-written
+  augmentation (AutoAugment-style ops are the biggest known lever on
+  CIFAR-10 ViTs); a deeper/wider variant (`--depth 8 --dim 512`, ~24M
+  params, still comfortable on 24 GB); and the
+  planned sequel this pipeline's patch-embed/block stack was built for — an
+  I-JEPA-style self-supervised pipeline (small ViT encoder + predictor +
+  EMA target on STL-10/Tiny ImageNet, linear-probe eval), which would be
+  the repo's first representation-learning pipeline.
 - `fine-tuning/llava15-full-lora` (planned, not started): the first real VLM
   fine-tune in this repo — image+text pairs, vision encoder/projector
   actually in the training graph, unlike `vicuna-7b-lora`/`qwen25-3b-lora`.
