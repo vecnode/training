@@ -1,0 +1,37 @@
+[project]
+name = "vit-cifar10"
+version = "0.1.0"
+description = "Vision Transformer (ViT) written by hand - patch embedding, learned CLS token + positional embeddings, pre-LN transformer blocks with hand-written multi-head self-attention - trained from scratch on CIFAR-10"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.26.0",
+  "torch==2.11.0",
+]
+# No transformers / timm / torchvision: the patch embedding, the learned CLS
+# token + positional embeddings, the pre-LN (norm-first) transformer blocks,
+# and the multi-head self-attention (QKV projections, scaled dot-product,
+# output projection) are all written out by hand as plain nn.Modules - torch
+# is used only for tensor ops, autograd, and GPU execution, the same role it
+# plays in every other training/ pipeline. Flip/crop augmentation is plain
+# torch ops (torch.flip + zero-pad + random crop + per-channel normalize),
+# the CIFAR-10 python pickles are parsed by hand (stdlib pickle), and the
+# evaluation prediction grid is a hand-written zlib PNG (no Pillow).
+#
+# This is the repo's first attention-based vision model and its first
+# from-scratch transformer of any kind: every other training/ pipeline is a
+# conv net, an autoencoder, a GAN, or a numpy/classic-ML model. It is also
+# the natural backbone for the planned I-JEPA-style self-supervised
+# pipeline (same patch embed / transformer blocks, encoder reused).
+
+[tool.uv]
+package = false
+
+# Pin torch to the CUDA 12.8 build. Without this, `uv sync` resolves the
+# CPU-only wheel from PyPI and GPU training silently stops working.
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
