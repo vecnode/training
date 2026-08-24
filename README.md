@@ -7,6 +7,7 @@ Model Training, Pre-Training and Fine-Tuning workspace, scaling from a single RT
 ## Repository
 
 - [training](./training/)
+    - Train MAE (Masked Autoencoder) on [CIFAR-100](https://cave.cs.toronto.edu/kriz/cifar.html) dataset
     - Train RVQ Audio Codec on [LJSpeech-1.1](https://keithito.com/LJ-Speech-Dataset/) dataset
     - Train ViT on [CIFAR-10](https://cave.cs.toronto.edu/kriz/cifar.html) dataset
     - Train UNet (Flow Matching) on [MNIST](www.kaggle.com/datasets/hojjatk/mnist-dataset) dataset
@@ -37,6 +38,9 @@ Text Datasets:
 - [CIFAR-10](https://cave.cs.toronto.edu/kriz/cifar.html)
     - The CIFAR-10 dataset consists of 60000 32x32 colour images in 10 classes, with 6000 images per class. There are 50000 training images and 10000 test images. 
 
+- [CIFAR-100](https://cave.cs.toronto.edu/kriz/cifar.html)
+    - CIFAR-100 is just like the CIFAR-10, except it has 100 classes containing 600 images each. There are 500 training images and 100 testing images per class. The 100 classes in the CIFAR-100 are grouped into 20 superclasses. Each image comes with a "fine" label (the class to which it belongs) and a "coarse" label (the superclass to which it belongs).
+
 - [Large Movie Review Dataset](https://ai.stanford.edu/~amaas/data/sentiment/)
     - A binary sentiment classification benchmark introduced in Maas et al., ACL 2011. Also known as aclImdb or simply IMDB. 
     - Contains 50,000 polarized movie reviews scraped from IMDB - 25,000 for training and 25,000 for testing.
@@ -58,6 +62,11 @@ Text Datasets:
 ## Commands
 
 ```sh
+# --- training/mae-cifar100: Masked Autoencoder (MAE) from scratch on CIFAR-100 ---
+uv run --directory training/mae-cifar100 python build_cifar100_dataset.py --data-dir "C:\path\to\cifar-100-python" --output-dir data
+uv run --directory training/mae-cifar100 python train_mae.py --data-path data/cifar100.npz --num-epochs 60 --batch-size 128 --output-dir runs/mae_cifar100
+uv run --directory training/mae-cifar100 python linear_probe.py --data-path data/cifar100.npz --checkpoint-path runs/mae_cifar100/mae_best.pt --output-dir runs/mae_cifar100
+
 # --- ViT on CIFAR-10
 uv run --directory training/vit-cifar10 python build_cifar10_dataset.py --data-dir "C:\path\to\cifar-10-python" --output-dir data
 uv run --directory training/vit-cifar10 python train_vit.py --data-path data/cifar10.npz --num-epochs 60 --batch-size 128 --output-dir runs/vit_cifar10

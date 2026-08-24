@@ -161,6 +161,31 @@ root covers the whole repo; subfolders don't get their own.
   ~23 min — below the ~80–86% guess this section's earlier draft carried,
   which was corrected to the measured numbers (the record). Details in
   `ARCHITECTURE.md` Stage 4.
+- **`training/mae-cifar100/`** — Masked Autoencoder
+  ([He et al. 2022](https://arxiv.org/abs/2111.06377)) trained **from
+  scratch** on CIFAR-100; the repo's **first self-supervised
+  (representation-learning) pipeline**, mask-reconstruct sibling of the
+  planned I-JEPA rung. Hand-written torch: patch embed, pos embeddings,
+  pre-LN blocks, hand-written MHA, per-sample fixed-count masking, a
+  lightweight decoder (pretraining-only), and the linear probe — no
+  `transformers`/`timm`/`torchvision`, no `DataLoader`. **The encoder is
+  vit-cifar10's stack reused** (copied in by hand), default patch 2 → 256
+  patches (64 visible at 75% mask; `--patch-size 4` gives the sibling's
+  64-patch config). **Loss = MSE on masked patches only, targets
+  per-patch-normalized** (the MAE trick; `--no-patch-norm` is the A/B);
+  **no pixel normalization in pretraining** (the targets are the pixels).
+  **Judge = hand-written linear probe** on frozen, mean-pooled features
+  (SGD momentum + cosine) — not FID/Inception, same rule as everywhere.
+  ~11.8M params (10.75M encoder / 1.02M decoder), ~35 s/epoch
+  (smoke-measured) → ~36 min for 60 epochs. Verified real run (repo
+  owner, RTX 3090): **25.56% test top-1 / 53.41% top-5** (coarse 37.9%)
+  at the 60-epoch defaults in ~36 min — recorded on the **final epoch-60
+  checkpoint**, which probes better than the best-val epoch-34 one
+  (24.65% / 53.15% / 36.8%; val recon bottomed mid-run while masked-MSE
+  kept improving — don't assume best-val = best features). Below the
+  ~30–45% guess this section's earlier draft carried, which was corrected
+  to the measured numbers (the record). Details in
+  `ARCHITECTURE.md` Stage 4.
 - **An Axolotl-based `fine-tuning/axolotl-ocr-summary/` pipeline existed
   earlier and was removed by the repo owner.** If something similar returns,
   note `axolotl[deepspeed]` only resolves its `uv` environment on Linux/WSL

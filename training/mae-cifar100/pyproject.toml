@@ -1,0 +1,36 @@
+[project]
+name = "mae-cifar100"
+version = "0.1.0"
+description = "Masked Autoencoder (MAE, He et al. 2022) written by hand - patchify, 75% random masking, vit-cifar10's patch-embed/block encoder, lightweight decoder, MSE on masked patches - trained from scratch on CIFAR-100, judged by a hand-written linear probe"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.26.0",
+  "torch==2.11.0",
+]
+# No transformers / timm / torchvision: the patch embedding, positional
+# embeddings, the pre-LN (norm-first) transformer blocks, the hand-written
+# multi-head self-attention (QKV projections, scaled dot-product, output
+# projection), the random masking, the lightweight decoder, and the linear
+# probe are all written out by hand as plain nn.Modules - torch is used only
+# for tensor ops, autograd, and GPU execution, the same role it plays in
+# every other training/ pipeline. The encoder is the same patch-embed/block
+# stack as training/vit-cifar10 (copied in by hand, as this project must not
+# import another pipeline folder's code), minus the CLS token and head that
+# MAE doesn't use. CIFAR-100 pickles are parsed by hand (stdlib pickle),
+# and every PNG (reconstruction grids, probe prediction grid) is a
+# hand-written zlib PNG (no Pillow). The linear probe is a trained-from-
+# scratch classifier on this model's own frozen features - the judge, not a
+# pretrained-feature score.
+
+[tool.uv]
+package = false
+
+# Pin torch to the CUDA 12.8 build. Without this, `uv sync` resolves the
+# CPU-only wheel from PyPI and GPU training silently stops working.
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }

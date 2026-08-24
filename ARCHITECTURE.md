@@ -206,7 +206,7 @@ folder independently deployable.
 ## Stage 4 — `training/`
 
 From-scratch / non-LoRA training of other models, as distinct from
-adapting an existing checkpoint (`fine-tuning/`). Nine pipelines so far,
+adapting an existing checkpoint (`fine-tuning/`). Ten pipelines so far,
 each an independent `uv` project and each writing out by hand whatever the
 usual library would hide.
 
@@ -451,6 +451,43 @@ the measured 66.8% is the record (the correction is documented in the
 pipeline README).
 
 
+[`training/mae-cifar100/`](training/mae-cifar100/README.md) is the repo's
+**first representation-learning (self-supervised) pipeline**: a Masked
+Autoencoder ([He et al., 2022](https://arxiv.org/abs/2111.06377)) trained
+**from scratch** on CIFAR-100 — patchify → mask 75% → encoder → lightweight
+decoder → MSE on the masked patches. The **encoder is vit-cifar10's
+patch-embed/block stack reused** (copied in by hand; the pipelines don't
+import each other), at a denser grid: default patch 2 → 256 patches (64
+visible at 75% masking — the paper's regime at 32×32, unlike the sibling's
+64-patch patch-4 config, which stays available via `--patch-size`). No CLS
+token (MAE doesn't use one), no head; the decoder is a separate ~1M-param
+transformer that exists only for pretraining. Masking is the paper's
+fixed-count per-sample permutation, not a Bernoulli; the loss is MSE on
+masked patches only with per-patch-normalized targets (`--no-patch-norm`
+is the documented A/B of that trick). ~11.8M params total (10,750,848
+encoder + 1,015,692 decoder), AdamW + warmup/cosine like the ViT sibling,
+flip+crop on raw [0,1] pixels (no normalization in pretraining — the
+reconstruction targets *are* the pixels), best checkpoint by a
+deterministic full-image val reconstruction MSE. **Judged by a hand-written
+linear probe** (`linear_probe.py`): a linear head trained from scratch on
+the encoder's frozen, mean-pooled patch-token features (SGD momentum +
+cosine, the paper's protocol) — the features are the model's own, so this
+is a from-scratch evaluation that does not violate the no-pretrained-
+features rule the way a FID/Inception score would. Verified on the RTX
+3090 (repo owner's run): **25.56% test top-1 / 53.41% top-5** (coarse
+top-1 37.9%) at the 60-epoch defaults in **2,166 s (~36 min)**. The
+final (epoch-60) checkpoint is the record — it probes +0.91 top-1 over
+the best-val (epoch-34) checkpoint (24.65% / 53.15% / 36.8%): val recon
+bottomed at epoch 34 while the masked-MSE kept improving, so the late
+features are better even though full-image recon drifted (a finding —
+don't assume the best-val checkpoint holds the best representation).
+Per-class oak_tree 69.0% best / bowl 1.0% worst — the classic CIFAR-100
+pattern. Both figures are below the ~30–45% estimate this entry's
+earlier draft carried — too optimistic for 60 epochs on 45k images
+without probe-time augmentation; the measured 25.56% is the record (the
+correction is documented in the pipeline README).
+
+
 ## Datasets
 
 None of the fine-tuning pipelines ship data — `DATASET/`, `data/`, `runs/`,
@@ -556,6 +593,23 @@ executions where noted, actually run, not assumed:
   `predictions_grid.png`. The ~80–86% expectation this pipeline's docs
   originally carried was corrected to the measured 66.8% (too optimistic
   for flip+crop-only at 60 epochs) — see the pipeline README.
+- `training/mae-cifar100` — new pipeline (MAE on CIFAR-100, the repo's
+  first self-supervised run), full 60-epoch run by the repo owner on the
+  RTX 3090 against the local `E:\datasets\cifar-100-python` drop:
+  `build_cifar100_dataset.py` wrote `data/cifar100.npz` (50k train / 10k
+  test, verified exact counts, fine + coarse labels); `train_mae.py`
+  (11,766,540 params: 10,750,848 encoder + 1,015,692 decoder, patch 2 →
+  256 patches, mask 75%) trained for 60 epochs in **2,166 s (~36 min)**
+  (train masked-MSE 0.666 → 0.257, best val recon 0.47463 at epoch 34);
+  `linear_probe.py` scored **25.56% test top-1 / 53.41% top-5** (coarse
+  37.9%) on the held-out 10k using the **final epoch-60 checkpoint** —
+  which probes better than the best-val epoch-34 one (24.65% / 53.15% /
+  36.8%): val recon bottomed mid-run while the masked-MSE kept improving,
+  so the late features are the better representation (both probe metrics
+  preserved in `runs/`; the comparison is deterministic — re-running the
+  best-checkpoint probe reproduces it exactly) — and wrote
+  `test_metrics.txt` + `probe_grid.png`. A 2-epoch smoke preceded the real
+  run (loss decreasing, grids/checkpoints written, ~35 s/epoch).
 Not executed this pass (no PDFs/poppler set up in this environment):
 
 - `pre-training/exec_1.bat` / `scripts/convert_pdf_to_png.ps1`
@@ -610,11 +664,29 @@ Not executed this pass (no PDFs/poppler set up in this environment):
   schedule is designed for the full budget); stronger hand-written
   augmentation (AutoAugment-style ops are the biggest known lever on
   CIFAR-10 ViTs); a deeper/wider variant (`--depth 8 --dim 512`, ~24M
-  params, still comfortable on 24 GB); and the
-  planned sequel this pipeline's patch-embed/block stack was built for — an
-  I-JEPA-style self-supervised pipeline (small ViT encoder + predictor +
-  EMA target on STL-10/Tiny ImageNet, linear-probe eval), which would be
-  the repo's first representation-learning pipeline.
+  params, still comfortable on 24 GB). The planned sequel this pipeline's
+  patch-embed/block stack was built for — self-supervised pretraining —
+  has now landed as the sibling [`training/mae-cifar100`](training/mae-cifar100/README.md)
+  (mask-reconstruct MAE rung, same stack reused); the next rung after that
+  is the I-JEPA-style pipeline (small ViT encoder + predictor + EMA target
+  on STL-10/Tiny ImageNet, linear-probe eval), which shares MAE's
+  mask-reconstruct DNA.
+- `training/mae-cifar100` is verified at **25.56% test top-1 / 53.41%
+  top-5** (coarse 37.9%; ~36 min for the 60-epoch pretrain) using the
+  **final epoch-60 checkpoint** — it probes better than the best-val
+  epoch-34 one (24.65% / 53.15% / 36.8%), because val recon bottomed
+  mid-run while the masked-MSE kept improving (don't assume the best-val
+  checkpoint holds the best representation). Natural rungs, in rough
+  order: the `--no-patch-norm` A/B (measures the MAE trick); the
+  `--patch-size 4`
+  A/B (vit-cifar10's literal 64-patch grid at the same 75% mask — the
+  denser patch-2 default is expected to win, but it's unmeasured); a
+  `--mask-ratio` sweep (50/75/90 — the paper's 75% is tuned for 196
+  patches, not 256); more pretraining epochs (`--num-epochs 120`, the
+  cosine is designed for the full budget); probe-time augmentation or a
+  k-NN probe as an augmentation-free alternative; and then the I-JEPA
+  rung above, which this pipeline's mask-reconstruct machinery sets up
+  directly.
 - `fine-tuning/llava15-full-lora` (planned, not started): the first real VLM
   fine-tune in this repo — image+text pairs, vision encoder/projector
   actually in the training graph, unlike `vicuna-7b-lora`/`qwen25-3b-lora`.

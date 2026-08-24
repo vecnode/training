@@ -272,6 +272,62 @@ constraint, not something to patch around silently.
   flip+crop-only at 60 epochs; the measured 66.8% is the record, and the
   correction is documented in the pipeline README.
 
+- **`training/mae-cifar100/`** trains a **Masked Autoencoder**
+  ([He et al. 2022](https://arxiv.org/abs/2111.06377)) **from scratch** on
+  CIFAR-100 - the repo's **first representation-learning (self-supervised)
+  pipeline**, and the mask-reconstruct sibling of the I-JEPA-style rung
+  planned in `ARCHITECTURE.md`. Hand-written philosophy like the rest of
+  `training/`: the patch embedding, positional embeddings, pre-LN
+  transformer blocks, hand-written multi-head self-attention, the random
+  masking, and the lightweight decoder are all plain `torch.nn` - no
+  `transformers`/`timm`/`torchvision`, no `DataLoader` (numpy-permutation
+  batching). The encoder is **vit-cifar10's patch-embed/block stack copied
+  in by hand** (pipelines never import each other's code), defaulting to
+  patch 2 -> 256 patches (64 visible at 75% masking; `--patch-size 4`
+  gives the sibling's literal 64-patch config). `build_cifar100_dataset.py`
+  is the same stdlib-pickle style as `vit-cifar10`'s builder, but CIFAR-100
+  ships one 50k `train` file + one 10k `test` file (plus `meta`), verified
+  by exact count. Things not to silently undo:
+  - **Masking is per-sample fixed-count (a random permutation keeping the
+    first 75%-complement), not a per-patch Bernoulli** - the paper's
+    scheme, so every image is masked at exactly `--mask-ratio`.
+  - **The loss is MSE on the masked patches only, with per-patch-normalized
+    targets** (subtract patch mean / divide patch std - the MAE trick that
+    stops the decoder collapsing to patch means). `--no-patch-norm` is the
+    documented A/B, not a flag to remove.
+  - **Pretraining does not normalize pixels** (flip+crop only, raw [0,1]):
+    the reconstruction targets ARE the pixels. Normalization belongs to the
+    linear probe, with the hardcoded CIFAR-100 train statistics.
+  - **The decoder is pretraining-only** (~1M of the ~11.8M params);
+    `linear_probe.py` discards it and reads frozen encoder features
+    (mean-pooled patch tokens - MAE has no CLS token).
+  - **The judge is a hand-written linear probe** (a linear head trained
+    from scratch on the model's own frozen features, SGD momentum + cosine
+    per the paper) - not FID/Inception, the same no-pretrained-features
+    rule as everywhere else in `training/`. Probe features are precomputed
+    offline (normalize-only inputs, no probe-time flip+crop - documented).
+  - **Pos-embed / mask-token are trunc-normal 0.02 initialized** (the
+    paper's init) - unlike vit-cifar10, whose pos embed is left at zero.
+  Defaults: 11,766,540 params (10,750,848 encoder / 1,015,692 decoder),
+  ~35 s/epoch on the RTX 3090 (smoke-measured) -> ~36 min for 60
+  epochs; best checkpoint by a deterministic full-image val reconstruction
+  MSE, the 10k test split stays unseen until `linear_probe.py`, which
+  reports test top-1/top-5, coarse (20 superclass) top-1, per-class +
+  100x100 confusion matrix, `test_metrics.txt` and a hand-written zlib
+  `probe_grid.png`. Verified real run on the RTX 3090 (repo owner):
+  **25.56% test top-1 / 53.41% top-5** (coarse 37.89%) at the 60-epoch
+  defaults in ~36 min (2,166 s) - recorded on the **final epoch-60
+  checkpoint**, which probes better than the best-val epoch-34 one
+  (24.65% / 53.15% / 36.80%): the val recon curve bottomed at epoch 34
+  while the masked-MSE kept improving, so the late features are the
+  better representation (a finding - don't assume the best-val checkpoint
+  holds the best features; the comparison is deterministic and was
+  reproduced). oak_tree 69.0% / bowl 1.0% per-class. That is below the
+  ~30-45% figure this section's earlier draft expected - too optimistic
+  for 60 epochs / 45k images without probe-time augmentation; the measured
+  25.56% is the record, and the correction is documented in the pipeline
+  README.
+
 - **Cross-folder references use full relative paths from repo root**, e.g.
   `fine-tuning/vicuna-7b-lora/README.md` reaches a sibling pipeline via
   `../../<stage>/<pipeline>/`. When moving, renaming or removing a pipeline
