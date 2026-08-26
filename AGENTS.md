@@ -328,6 +328,58 @@ constraint, not something to patch around silently.
   25.56% is the record, and the correction is documented in the pipeline
   README.
 
+- **`training/dit-cifar100/`** trains a **class-conditional Diffusion
+  Transformer** ([Peebles & Xie 2022](https://arxiv.org/abs/2212.09748) -
+  the architecture Sora is built on) **from scratch** on CIFAR-100 - the
+  repo's **first class-conditional generative transformer**, natural big
+  sibling of `flow-matching-mnist` (same conditional-OT flow-matching
+  objective, now conditioned on the 100 real fine classes, with
+  classifier-free guidance). Hand-written philosophy like the rest of
+  `training/`: the patch embedding, the frozen 2D sincos positional
+  embedding, the adaLN-Zero transformer blocks, the hand-written multi-head
+  self-attention, the final unpatchify layer, the class embedding + null
+  token, the conditional-OT probability path, the velocity-regression
+  loss, the EMA, and the Euler ODE sampler are all plain `torch.nn` - no
+  `diffusers`/`torchcfm`/`torchdiffeq`/`transformers`/`timm`/`torchvision`,
+  no `DataLoader` (numpy-permutation batching). `build_cifar100_dataset.py`
+  is the same stdlib-pickle builder / same `data/cifar100.npz` contract as
+  `mae-cifar100`. Things not to silently undo:
+  - **The objective is conditional-OT flow matching, not the DiT paper's
+    DDPM** - `mse(v(x_t, t, y), u)` on the Lipman et al. path
+    (`--sigma-min 0` = rectified flow); no noise schedule, no ELBO, no
+    reweighting. Don't add betas/`alpha_bar` or a variance head; that
+    turns it back into a DDPM.
+  - **CFG is trained with class dropout to null token 100**
+    (`--cfg-dropout 0.1`, the DiT paper's value); at sample time
+    `v_cfg = v_uncond + cfg*(v_cond - v_uncond)`, and `--cfg-scale 1.0` is
+    plain conditional sampling (one forward per step). The null token is
+    the extra embedding slot, not a 101st class.
+  - **The architecture follows the paper exactly**: conditioning dimension
+    = model dim (not 4x), 256-dim sinusoidal time embedding, final layer
+    shift/scale without a gate, frozen sincos pos embed (the paper ablated
+    learned ones worse), xavier Linears + zeroed adaLN/final output init.
+    Don't "fix" the embedding widths to another reimplementation's 4x
+    convention - that silently changes the architecture.
+  - **Judge by `samples_grid.png`** (100 class-conditional samples, one
+    per fine class, row-major), **`cfg_sweep.png`** (same latents at CFG
+    scales 1.0-5.0), the nearest-neighbour memorization check vs a
+    real-image control, and the test velocity MSE - the
+    `flow-matching-mnist` rule. Deliberately **no FID** (pretrained
+    Inception), the same rule that keeps FID out of `flow-matching-mnist`
+    and ViSQOL out of `rvq-audio-codec`.
+  Defaults are **9,828,876 params** (`--dim 256 --depth 8 --heads 8
+  --patch-size 2`, 256 tokens - the same token count as DiT-S/4 at 256 px),
+  ~75 s/epoch fp32 on the RTX 3090 at batch 256 -> ~75 min for 60 epochs;
+  best checkpoint by a deterministic-seed val velocity MSE, the 10k test
+  split stays unseen until `evaluate_dit.py`. Verified real run on the RTX
+  3090 (repo owner): **60 epochs in 4,521 s (~75 min)**, train velocity MSE
+  0.5174 -> 0.1695, best val 0.1842 at epoch 55, **test velocity MSE
+  0.1887** on the held-out 10k (EMA weights); generated samples sit ~47%
+  farther from the training set (mean L2 12.105) than real unseen test
+  images (8.210) - no memorization, the same direction as
+  `flow-matching-mnist`. The ~0.17-0.19 loss floor is the irreducible
+  conditional variance of the velocity target, not a defect.
+
 - **Cross-folder references use full relative paths from repo root**, e.g.
   `fine-tuning/vicuna-7b-lora/README.md` reaches a sibling pipeline via
   `../../<stage>/<pipeline>/`. When moving, renaming or removing a pipeline

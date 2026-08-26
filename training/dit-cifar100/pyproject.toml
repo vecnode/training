@@ -1,0 +1,34 @@
+[project]
+name = "dit-cifar100"
+version = "0.1.0"
+description = "Class-conditional DiT (Sora-style diffusion transformer, adaLN-Zero blocks written by hand) trained from scratch on CIFAR-100 with the same conditional-OT flow-matching objective as flow-matching-mnist, 100 real classes and classifier-free guidance"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.26.0",
+  "torch==2.11.0",
+]
+# No diffusers/torchcfm/torchdiffeq/torchvision or any prebuilt diffusion or
+# transformer library: the patch embedding, the fixed 2D sincos positional
+# embedding, the adaLN-Zero transformer blocks, the hand-written multi-head
+# self-attention (QKV projections, scaled dot-product, output projection),
+# the conditional-OT probability path, the velocity-regression loss, the
+# class embedding + classifier-free guidance, the EMA, and the Euler ODE
+# sampler are all written out by hand as plain nn.Modules / functions -
+# torch is used only for tensor ops, autograd, and GPU execution, the same
+# role it plays in every other training/ pipeline (no DataLoader,
+# numpy-permutation batching). CIFAR-100 pickles are parsed by hand (stdlib
+# pickle), and every PNG (sample grids, CFG sweep, nearest-neighbour check)
+# is a hand-written zlib PNG (no Pillow).
+
+[tool.uv]
+package = false
+
+# Pin torch to the CUDA 12.8 build. Without this, `uv sync` resolves the
+# CPU-only wheel from PyPI and GPU training silently stops working.
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }

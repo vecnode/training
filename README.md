@@ -7,6 +7,7 @@ Model Training, Pre-Training and Fine-Tuning workspace, scaling from a single RT
 ## Repository
 
 - [training](./training/)
+    - Train Class-conditional DiT on [CIFAR-100](https://cave.cs.toronto.edu/kriz/cifar.html) dataset
     - Train MAE (Masked Autoencoder) on [CIFAR-100](https://cave.cs.toronto.edu/kriz/cifar.html) dataset
     - Train RVQ Audio Codec on [LJSpeech-1.1](https://keithito.com/LJ-Speech-Dataset/) dataset
     - Train ViT on [CIFAR-10](https://cave.cs.toronto.edu/kriz/cifar.html) dataset
@@ -29,7 +30,16 @@ Model Training, Pre-Training and Fine-Tuning workspace, scaling from a single RT
 
 ## Datasets
 
-Text Datasets:
+Current size <80Gb.
+
+- [nvidia/OpenMathInstruct-2](https://huggingface.co/datasets/nvidia/OpenMathInstruct-2)
+    - OpenMathInstruct-2 is a math instruction tuning dataset with 14M problem-solution pairs generated using the Llama3.1-405B-Instruct model. The training set problems of GSM8K and MATH are used for constructing the dataset
+
+- [openai/gsm8k](https://huggingface.co/datasets/openai/gsm8k)
+    - GSM8K (Grade School Math 8K) is a dataset of 8.5K high quality linguistically diverse grade school math word problems. The dataset was created to support the task of question answering on basic mathematical problems that require multi-step reasoning.
+
+- [openslr/librispeech_asr](https://huggingface.co/datasets/openslr/librispeech_asr)
+    - LibriSpeech is a corpus of approximately 1000 hours of 16kHz read English speech, prepared by Vassil Panayotov with the assistance of Daniel Povey. The data is derived from read audiobooks from the LibriVox project, and has been carefully segmented and aligned.
 
 - [abisee/cnn_dailymail](https://huggingface.co/datasets/abisee/cnn_dailymail)
     - text/summary (312k rows)
@@ -62,10 +72,16 @@ Text Datasets:
 ## Commands
 
 ```sh
+# --- training/dit-cifar100: Class-conditional DiT
+uv run --directory training/dit-cifar100 python build_cifar100_dataset.py --data-dir "C:\path\to\cifar-100-python" --output-dir data
+uv run --directory training/dit-cifar100 python train_dit.py --data-path data/cifar100.npz --patch-size 2 --dim 256 --depth 8 --heads 8 --num-epochs 60 --batch-size 256 --output-dir runs/dit_cifar100
+uv run --directory training/dit-cifar100 python evaluate_dit.py --data-path data/cifar100.npz --checkpoint-path runs/dit_cifar100/dit_best.pt --num-steps 50 --cfg-scale 3.0 --output-dir runs/dit_cifar100
+
 # --- training/mae-cifar100: Masked Autoencoder (MAE) from scratch on CIFAR-100 ---
 uv run --directory training/mae-cifar100 python build_cifar100_dataset.py --data-dir "C:\path\to\cifar-100-python" --output-dir data
 uv run --directory training/mae-cifar100 python train_mae.py --data-path data/cifar100.npz --num-epochs 60 --batch-size 128 --output-dir runs/mae_cifar100
 uv run --directory training/mae-cifar100 python linear_probe.py --data-path data/cifar100.npz --checkpoint-path runs/mae_cifar100/mae_best.pt --output-dir runs/mae_cifar100
+uv run --directory training/mae-cifar100 python linear_probe.py --data-path data/cifar100.npz --checkpoint-path runs/mae_cifar100/mae_final.pt --output-dir runs/mae_cifar100
 
 # --- ViT on CIFAR-10
 uv run --directory training/vit-cifar10 python build_cifar10_dataset.py --data-dir "C:\path\to\cifar-10-python" --output-dir data

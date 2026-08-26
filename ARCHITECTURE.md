@@ -206,7 +206,7 @@ folder independently deployable.
 ## Stage 4 — `training/`
 
 From-scratch / non-LoRA training of other models, as distinct from
-adapting an existing checkpoint (`fine-tuning/`). Ten pipelines so far,
+adapting an existing checkpoint (`fine-tuning/`). Eleven pipelines so far,
 each an independent `uv` project and each writing out by hand whatever the
 usual library would hide.
 
@@ -488,6 +488,47 @@ without probe-time augmentation; the measured 25.56% is the record (the
 correction is documented in the pipeline README).
 
 
+[`training/dit-cifar100/`](training/dit-cifar100/README.md) is the repo's
+**first class-conditional generative transformer**: a Diffusion Transformer
+([Peebles & Xie, 2022](https://arxiv.org/abs/2212.09748) — the architecture
+Sora is built on) trained **from scratch** on CIFAR-100, the natural big
+sibling of `training/flow-matching-mnist` (same conditional-OT flow-matching
+objective, now conditioned on the 100 real fine classes, with
+classifier-free guidance). Hand-written philosophy like the rest of
+`training/`: the patch embedding, the frozen 2D sincos positional
+embedding, the adaLN-Zero transformer blocks, the hand-written multi-head
+self-attention, the final unpatchify layer, the class embedding (+ null
+token), the conditional-OT probability path, the velocity-regression loss,
+the EMA, and the Euler ODE sampler are all plain `torch.nn` — no
+`diffusers`/`torchcfm`/`torchdiffeq`/`transformers`/`timm`/`torchvision`,
+no `DataLoader` (numpy-permutation batching). **The objective is
+`mse(v(x_t, t, y), x1 - (1-sigma_min)*x0)` on the conditional-OT path
+`x_t = (1-(1-sigma_min)*t)*x0 + t*x1`** — byte-identical to
+`flow-matching-mnist`'s loss, plus the class. CFG is trained by dropping
+the class to null token 100 with probability 0.1 (the DiT paper's value);
+sampling is `v_uncond + cfg*(v_cond - v_uncond)` integrated by Euler.
+Defaults `--patch-size 2 --dim 256 --depth 8 --heads 8` = **9,828,876
+params** (256 tokens, the same density as DiT-S/4 at 256 px), AdamW +
+warmup/cosine like the ViT siblings, flip+crop on raw [0,1] pixels (then
+rescaled to [-1,1] like `flow-matching-mnist`), EMA weights for sampling,
+best checkpoint by a deterministic-seed val velocity MSE, the 10k test
+split stays unseen until `evaluate_dit.py`. **Judged the
+`flow-matching-mnist` way** (the user's stated rule): `samples_grid.png`
+(100 class-conditional samples, one per fine class), `cfg_sweep.png` (the
+same latents at CFG scales 1.0–5.0), the nearest-neighbour memorization
+check vs a real-image control, and the test velocity MSE — deliberately
+**no FID** (pretrained Inception, same rule as everywhere else in
+`training/`). Verified on the RTX 3090 (repo owner's run): **9,828,876
+params, 60 epochs in 4,521 s (~75 min)** — train velocity MSE 0.5174 →
+0.1695, best val 0.1842 at epoch 55, **test velocity MSE 0.1887** on the
+held-out 10k (EMA weights, ~75 s/epoch at batch 256). Nearest-neighbour
+check: generated samples sit ~47% farther from the training set (mean L2
+12.105, min 9.572) than real unseen test images (8.210 / 5.152) — no
+memorization, the same direction `flow-matching-mnist` measured. The
+~0.17–0.19 loss floor is expected (the velocity target is irreducibly
+random given `(x_t, t, y)`) — judge the sample grids, not the loss.
+
+
 ## Datasets
 
 None of the fine-tuning pipelines ship data — `DATASET/`, `data/`, `runs/`,
@@ -610,6 +651,24 @@ executions where noted, actually run, not assumed:
   best-checkpoint probe reproduces it exactly) — and wrote
   `test_metrics.txt` + `probe_grid.png`. A 2-epoch smoke preceded the real
   run (loss decreasing, grids/checkpoints written, ~35 s/epoch).
+- `training/dit-cifar100` — new pipeline (class-conditional DiT on
+  CIFAR-100, the repo's first class-conditional generative transformer),
+  full 60-epoch run by the repo owner on the RTX 3090 against the same
+  local `E:\datasets\cifar-100-python` drop:
+  `build_cifar100_dataset.py` wrote `data/cifar100.npz` (50k train / 10k
+  test, verified exact counts, fine + coarse labels); `train_dit.py`
+  (9,828,876 params, patch 2 → 256 tokens, dim 256 / depth 8 / heads 8)
+  trained for 60 epochs in **4,521 s (~75 min)** (train velocity MSE
+  0.5174 → 0.1695, best val 0.1842 at epoch 55); `evaluate_dit.py` scored
+  **0.1887 velocity MSE** on the held-out 10k (EMA weights) and wrote
+  `samples_grid.png` (100 classes, one per fine class, cfg 3.0),
+  `cfg_sweep.png` and `nearest_neighbours.png`. Nearest-neighbour check:
+  generated samples sit **~47% farther** from the training set (mean L2
+  12.105, min 9.572) than real unseen test images (8.210 / 5.152) — no
+  memorization, the same direction `flow-matching-mnist` measured. The
+  ~0.17–0.19 loss floor is the irreducible conditional variance of the
+  velocity target, not a defect. A 2-epoch smoke + a 1-epoch timing run
+  preceded the real run.
 Not executed this pass (no PDFs/poppler set up in this environment):
 
 - `pre-training/exec_1.bat` / `scripts/convert_pdf_to_png.ps1`
@@ -687,6 +746,22 @@ Not executed this pass (no PDFs/poppler set up in this environment):
   k-NN probe as an augmentation-free alternative; and then the I-JEPA
   rung above, which this pipeline's mask-reconstruct machinery sets up
   directly.
+- `training/dit-cifar100` is verified at **~75 min for the 60-epoch
+  defaults** (9,828,876 params, train velocity MSE 0.5174 → 0.1695, best
+  val 0.1842 at epoch 55, test 0.1887; generated samples sit ~47% farther
+  from the training set than real test images — no memorization). Natural
+  rungs, in rough order: the `--cfg-scale` sweep on the final checkpoint
+  (the evaluator's `cfg_sweep.png` shows 1.0–5.0; the trade-off between
+  class fidelity and diversity is the obvious knob to tune per class
+  group); a longer run (`--num-epochs 120`, the cosine is designed for the
+  full budget — val was still improving at epoch 55–60); the `--no-augment`
+  A/B (measures how much of the quality is the flip+crop); a bigger model
+  (`--dim 384 --depth 12`, the literal DiT-S/2 sizing — ~29M params, still
+  comfortable on 24 GB); and the natural sequel this pipeline's
+  conditioning machinery sets up directly: **class-conditional generation
+  at higher resolution** (CIFAR-10/STL-10 at 64×64, or latent-DiT on
+  `cifar10-vqvae`'s codes), which is what turns the Sora-style stack into a
+  production-shaped generator.
 - `fine-tuning/llava15-full-lora` (planned, not started): the first real VLM
   fine-tune in this repo — image+text pairs, vision encoder/projector
   actually in the training graph, unlike `vicuna-7b-lora`/`qwen25-3b-lora`.

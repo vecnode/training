@@ -186,6 +186,35 @@ root covers the whole repo; subfolders don't get their own.
   ~30–45% guess this section's earlier draft carried, which was corrected
   to the measured numbers (the record). Details in
   `ARCHITECTURE.md` Stage 4.
+- **`training/dit-cifar100/`** — class-conditional DiT
+  ([Peebles & Xie 2022](https://arxiv.org/abs/2212.09748), the Sora
+  architecture) trained **from scratch** on CIFAR-100; the repo's **first
+  class-conditional generative transformer**, natural big sibling of
+  `flow-matching-mnist` — the same conditional-OT flow-matching objective
+  (`mse(v(x_t, t, y), x1 − (1−σ_min)x0)` on the Lipman et al. path,
+  `--sigma-min 0` = rectified flow), now conditioned on the 100 fine
+  classes with **classifier-free guidance**. Hand-written torch: patch
+  embed, frozen 2D sincos pos embed, adaLN-Zero blocks (scale/shift/gate
+  per norm, zero-init), hand-written MHA, final unpatchify, class embed +
+  null token, EMA, Euler ODE sampler — no
+  `diffusers`/`torchcfm`/`torchdiffeq`/`transformers`/`timm`/`torchvision`,
+  no `DataLoader`. **CFG is trained with class dropout 0.1 to null token
+  100**; sampling is `v_uncond + cfg*(v_cond − v_uncond)`. Architecture
+  follows the paper exactly (conditioning dim = model dim, 256-dim
+  sinusoidal time embed, final layer shift/scale without a gate, frozen
+  sincos pos embed) — don't "fix" it to a 4×-embedding reimplementation.
+  ~9.83M params at defaults (`--dim 256 --depth 8 --heads 8
+  --patch-size 2`, 256 tokens), ~75 s/epoch fp32 on the 3090 at batch 256
+  → ~75 min for 60 epochs. Judge by `samples_grid.png` (one sample per
+  class) + `cfg_sweep.png` + the nearest-neighbour memorization check vs a
+  real-image control + test velocity MSE — **no FID by design**, same rule
+  as FID in `flow-matching-mnist`. Details in `ARCHITECTURE.md` Stage 4.
+  Verified real run (repo owner, RTX 3090): **60 epochs in ~75 min**,
+  train velocity MSE 0.5174 → 0.1695, best val 0.1842 at epoch 55,
+  **test 0.1887** (EMA weights); generated samples sit ~47% farther from
+  the training set (mean L2 12.105) than real test images (8.210) — no
+  memorization. The ~0.17–0.19 loss floor is the irreducible conditional
+  variance of the velocity target, not a defect.
 - **An Axolotl-based `fine-tuning/axolotl-ocr-summary/` pipeline existed
   earlier and was removed by the repo owner.** If something similar returns,
   note `axolotl[deepspeed]` only resolves its `uv` environment on Linux/WSL
